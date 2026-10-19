@@ -46,7 +46,7 @@ Databricks says *n/a*.
 | Component (6.1) | **GCP** (chosen) | AWS | Databricks |
 | --- | --- | --- | --- |
 | Object storage / data lake | Cloud Storage | Amazon S3 | Unity Catalog volumes — still S3/GCS underneath, billed by the cloud |
-| Data versioning | DVC remote on S3 | DVC remote on GCS | **Delta Lake table history + time travel** — replaces DVC rather than hosting it |
+| Data versioning | DVC remote on GCS | DVC remote on S3 | **Delta Lake table history + time travel** — replaces DVC rather than hosting it |
 | Warehouse / serving DB | Cloud SQL for PostgreSQL | RDS for PostgreSQL | Delta tables + SQL warehouse. **No PostgreSQL**: the online feature path needs Databricks Online Tables or an external store |
 | Orchestrator | Cloud Composer 3 | Amazon MWAA | **Databricks Workflows (Jobs)** |
 | Experiment tracking + registry | Vertex AI Experiments + Model Registry | SageMaker with MLflow | **MLflow in Unity Catalog** — native; Databricks authors MLflow |
@@ -89,7 +89,7 @@ The alternative that was priced first. Repeated here so the three totals sit sid
 
 | Line | Size assumed | $/mo | Rate used |
 | --- | --- | --- | --- |
-| Cloud Storage | 3 | 50 GB Standard + ops | ~$0.020/GB-mo |
+| Cloud Storage | 50 GB Standard + ops | 3 | ~$0.020/GB-mo |
 | Cloud SQL for PostgreSQL | Enterprise, 2 vCPU / 4 GB, 100 GB SSD | 98 | $0.0413/vCPU-hr, $0.007/GB-hr, $0.170/GB-mo SSD |
 | **Cloud Composer 3** | small environment, 24/7 | **400** | $0.06/DCU-hr × ~9 DCU/hr |
 | Vertex AI Experiments + Model Registry | registry itself is free; metadata storage only | 5 | registry $0 |

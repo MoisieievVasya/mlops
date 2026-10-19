@@ -543,6 +543,18 @@ Local stack, pinned to the course reference stack, with the managed AWS service 
 AWS is the named cloud column throughout; GCP and Azure equivalents are given for completeness.
 Naming them is required; running on them is not.
 
+**Why AWS is the named column.** Nothing in this design depends on it — the three columns below are
+interchangeable and the cost estimate in 6.7 would move by a few percent, not by a factor. AWS is
+named because it is the column the course reference material is written against, and because
+committing to one vendor makes 6.7 a real number instead of a range. The one place the choice
+actually bites is the vector store row, and that is argued below.
+
+**Why the stack is assembled from components rather than bought as a platform.** The alternative —
+one ML platform covering orchestration, tracking, registry, feature store and compute — is argued
+and rejected in **7.1 A6 (Databricks)** and **7.1 A3 (AutoML)**. The short version: Spark-scale
+tooling solves a problem a 90 MB monthly batch does not have, and a managed platform has no laptop
+equivalent, which Labs 2–4 require.
+
 | Component (6.1) | Local, pinned | AWS | GCP | Azure |
 | --- | --- | --- | --- | --- |
 | Object storage / data lake | MinIO-compatible, `pgsty/silo:RELEASE.2026-09-16T00-00-00Z` | [Amazon S3](https://docs.aws.amazon.com/s3/) | Cloud Storage | Blob Storage |
@@ -811,6 +823,30 @@ arbitrary distinction that correlates with the publication year; per-class metri
 a few hundred rows across a decade are too noisy to gate a promotion; and the consumer's section
 list has 17 slots, not 42.
 *Rejected*, with the mapping made explicit and versioned so the decision is auditable and reversible.
+
+**A6 — Databricks as the cloud platform, instead of a per-component managed stack.**
+*Pros:* one platform covers the orchestrator, the tracking server, the model registry, the feature
+store and the compute, so section 6.2 would be one row instead of twelve. Delta Lake gives ACID
+tables and time travel on the lake, which is a genuinely better version of what DVC does here.
+MLflow is Databricks' own project, so the tracking-and-registry row maps there more naturally than
+anywhere else — this is the strongest argument for the option. Spark would remove any future ceiling
+on data volume, and Databricks workflows appear in the Appendix 3 reference table.
+*Cons:* three, in order of weight. **(1) Spark solves a problem this project does not have.** The
+corpus is ~209k rows / ~90 MB — it fits in memory on the target laptop a hundred times over. Spark
+is for data that does not fit on one machine; at this size it is JVM startup, shuffle and
+serialisation overhead bought for nothing, and it fights the 16 GB / 4 GB Minikube ceiling of 4.2.
+Appendix 3 itself scopes Spark to projects that keep a streaming path; this one is batch, one
+calendar month per run (5.2). **(2) There is no local Databricks.** The first row of the maturity
+scorecard is reproducibility from a clean clone and Lab 4 deploys to Minikube on a laptop; a
+Databricks workspace has no laptop-sized equivalent, so Labs 2–4 could not run offline at all.
+**(3) It hides what is being graded** — collapsing the version point, the quality gate and the
+point-in-time join into a managed platform is the same objection that rejects A3, and it applies
+with more force here because more components disappear at once.
+*Rejected.* Databricks is the right answer at terabyte scale, on an existing lakehouse, or where
+Delta Lake's ACID guarantees are a requirement. At 90 MB of monthly batch text it is a platform
+bought to solve a scale problem that does not exist. Noted as the first thing to revisit if the
+corpus grows past what one machine can hold, or if a second and third publisher (R2) turn the single
+feed into a real ingestion volume.
 
 ### 7.2 Experiment results
 

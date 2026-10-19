@@ -543,11 +543,14 @@ Local stack, pinned to the course reference stack, with the managed AWS service 
 AWS is the named cloud column throughout; GCP and Azure equivalents are given for completeness.
 Naming them is required; running on them is not.
 
-**Why AWS is the named column.** Nothing in this design depends on it — the three columns below are
-interchangeable and the cost estimate in 6.7 would move by a few percent, not by a factor. AWS is
-named because it is the column the course reference material is written against, and because
-committing to one vendor makes 6.7 a real number instead of a range. The one place the choice
-actually bites is the vector store row, and that is argued below.
+**Why AWS is the named column.** AWS is named because it is the column the course reference material
+is written against, and because committing to one vendor makes 6.7 a real number instead of a range.
+The GCP and Databricks variants were priced before that commitment and are in
+**[`infra-variants.md`](infra-variants.md)**; the headline result is that GCP is ~15% *more*
+expensive (Cloud Composer 3 is worse than MWAA, and Vertex AI Feature Store bills an always-on node
+where SageMaker bills per operation), and that Databricks is ~40% cheaper for reasons argued in
+7.1 A6. The one place the vendor choice bites inside this table is the vector store row, argued
+below.
 
 **Why the stack is assembled from components rather than bought as a platform.** The alternative —
 one ML platform covering orchestration, tracking, registry, feature store and compute — is argued
@@ -737,6 +740,20 @@ relax under that pressure is the LLM assist on every abstained article** (restri
 confidence decile), followed by the 13-month serving-log retention. The ceiling in 4.2 is the trigger
 for that conversation.
 
+**Cross-cloud check.** The same workload priced on GCP and on Databricks is in
+[`infra-variants.md`](infra-variants.md): **GCP ≈ $961, AWS ≈ $840, Databricks ≈ $510**. Databricks
+is genuinely the cheapest, and the reason is the point made in the paragraph above — it has neither a
+managed-Airflow line nor a Kubernetes line, which together are **$560 of this estimate**. Priced
+against a *cost-optimised* AWS instead of the reference stack (Airflow and MLflow as pods on the EKS
+cluster that already exists), AWS lands at **≈ $455** and the gap closes to noise. The decision not
+to use Databricks is made in 7.1 A6 and is not a cost decision.
+
+**Provenance.** The rates in this section are design-time estimates. The providers' calculators could
+not be opened from the environment this document was written in — see section 0 of
+[`infra-variants.md`](infra-variants.md) — so every total here should be re-derived on
+[calculator.aws](https://calculator.aws/) before it is quoted as a number rather than an order of
+magnitude.
+
 ### 6.8 Integration points
 
 | | **Upstream** | **Downstream** |
@@ -842,11 +859,19 @@ Databricks workspace has no laptop-sized equivalent, so Labs 2–4 could not run
 **(3) It hides what is being graded** — collapsing the version point, the quality gate and the
 point-in-time join into a managed platform is the same objection that rejects A3, and it applies
 with more force here because more components disappear at once.
-*Rejected.* Databricks is the right answer at terabyte scale, on an existing lakehouse, or where
-Delta Lake's ACID guarantees are a requirement. At 90 MB of monthly batch text it is a platform
-bought to solve a scale problem that does not exist. Noted as the first thing to revisit if the
-corpus grows past what one machine can hold, or if a second and third publisher (R2) turn the single
-feed into a real ingestion volume.
+*On cost, the alternative wins and that is conceded.* Priced out in
+[`infra-variants.md`](infra-variants.md), Databricks comes to **≈ $510/month against AWS at ≈ $840
+and GCP at ≈ $961** — roughly 40% cheaper. It wins on exactly the two rows where it offers nothing:
+no managed-Airflow environment fee (MWAA $360, Composer $400, Databricks Workflows ~$7 for the same
+~60 short job runs) and no Kubernetes cluster (EKS $200, GKE $115). Those two lines are **$560 of
+the AWS estimate — always-on capacity that is idle almost all the time.** The cost advantage is real
+and it is the same fact as the objection: Databricks is cheaper *because* it removes the components
+Labs 2 and 4 exist to make us build.
+*Rejected on reproducibility, not on price.* Databricks is the right answer at terabyte scale, on an
+existing lakehouse, with a streaming path, or where Delta Lake's ACID guarantees are a requirement.
+At 90 MB of monthly batch text it buys scale we do not need, and it cannot run on the laptop that
+Labs 2–4 must run on. Noted as the first thing to revisit if the corpus grows past what one machine
+can hold, or if a second and third publisher (R2) turn the single feed into real ingestion volume.
 
 ### 7.2 Experiment results
 

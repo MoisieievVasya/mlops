@@ -125,6 +125,10 @@ fail while both look perfect (the batch is stale and we are scoring last month's
 
 ## 4 Requirements and constraints
 
+What the system must do, and the numbers it must hold while doing it. The functional list is what a
+caller may ask for; the non-functional list is one row per category, and every row carries a number
+or an explicit assumption.
+
 ### 4.1 Functional requirements
 
 | # | Requirement |
@@ -169,6 +173,9 @@ not solved.
 ---
 
 ## 5 Methodology
+
+How the problem is framed, what data supports that framing, what gets built first, and how a
+candidate model earns its way into production.
 
 ### 5.1 Problem statement
 
@@ -386,6 +393,10 @@ against "how much of the traffic did the model actually decide".
 ---
 
 ## 6 Implementation
+
+What runs where, what it costs, who may call it and how it is watched. The three diagrams of 6.1 and
+the component table of 6.2 name the same things: a component that appears in one and not the other
+is a defect in this document, not a detail.
 
 ### 6.1 High-level design
 
@@ -756,11 +767,13 @@ ceiling in 4.2 is the trigger for that conversation.
 
 **Cross-platform check.** The alternatives are priced in [`infra-variants.md`](infra-variants.md).
 **Databricks comes to ≈ $510** against this column's $961, for the reason given in point 1: it has
-neither a managed-Airflow line nor a Kubernetes line, which here are **$515 together**. Against a
-*cost-optimised* build of this same column — Airflow as pods on the GKE cluster that already exists,
-Feast on the Cloud SQL instance already paid for — this column lands at **≈ $410**, below Databricks.
-The gap is a consequence of naming managed services, not of the platform. The decision not to use
-Databricks is made in 7.1 A6 and is not a cost decision either way.
+neither a managed-Airflow line nor a Kubernetes line, which here are **$515 together**. Taking the
+two divergences of 6.2 and self-hosting Airflow on the GKE cluster that already exists brings this
+column to **≈ $410** — but the fair comparison applies the same attention to both sides, and
+Databricks optimised the same way is **≈ $306**. **Databricks is therefore cheaper under every
+comparison**, as listed and optimised alike. This platform is chosen anyway, on the fidelity
+argument of 6.2 and 7.1 A6; the cost of that choice is roughly $100/month at today's volume and is
+stated rather than argued away.
 
 **Provenance.** The rates here are design-time estimates. The vendor pricing pages could not be
 opened from the environment this document was written in — see section 0 of
@@ -803,6 +816,9 @@ about the *model's age*, not about the age of an individual answer.
 ---
 
 ## 7 Appendix
+
+The alternatives that were considered and rejected with reasons, the two placeholders Labs 2 and 4
+fill with measured numbers, and what each remaining lab adds to this system.
 
 ### 7.1 Alternatives considered
 
@@ -881,8 +897,9 @@ the same ~60 short job runs) and no Kubernetes cluster (GKE $115). Those two lin
 estimate — always-on capacity idle almost all the time.** The cost advantage is real and it is the
 same fact as the objection: Databricks is cheaper *because* it removes the components Labs 2 and 4
 exist to make us build. Taking the two divergences of 6.2 and self-hosting Airflow on the cluster
-that already exists brings this column to **≈ $410**, below Databricks — so the listed gap is a
-consequence of naming managed services, not of the platform.
+that already exists brings this column to **≈ $410**; Databricks optimised the same way is **≈ $306**.
+The alternative is cheaper on every comparison, so this choice costs roughly **$100/month at today's
+volume** and is made on fidelity, not price.
 *Rejected on reproducibility, not on price.* Databricks is the right answer at terabyte scale, on an
 existing lakehouse, with a streaming path, or where Delta Lake's ACID guarantees are a requirement.
 At 90 MB of monthly batch text it buys scale we do not need, and it cannot run on the laptop that

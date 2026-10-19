@@ -497,31 +497,31 @@ flowchart TB
 
       subgraph STORE["storage and state"]
         direction LR
-        MINIO["MinIO-compatible object store<br/>pgsty/silo RELEASE.2026-09-16<br/>raw · interim · features · MLflow artifacts<br/><i>GCP: Cloud Storage</i>"]
-        PG["PostgreSQL 16<br/>MLflow backend · Feast registry and online store<br/>serving log · pgvector 0.8.7 (Lab 3)<br/><i>GCP: Cloud SQL for PostgreSQL</i>"]
-        DVC["DVC 3.67.1 + dvc-s3 3.3.0<br/>remote pointing at the object store<br/><i>GCP: GCS remote</i>"]
+        MINIO["MinIO-compatible object store<br/>pgsty/silo RELEASE.2026-09-16<br/>raw · interim · features · MLflow artifacts<br/>↳ GCP: Cloud Storage"]
+        PG["PostgreSQL 16<br/>MLflow backend · Feast registry and online store<br/>serving log · pgvector 0.8.7 (Lab 3)<br/>↳ GCP: Cloud SQL for PostgreSQL"]
+        DVC["DVC 3.67.1 + dvc-s3 3.3.0<br/>remote pointing at the object store<br/>↳ GCP: GCS remote"]
       end
 
       subgraph PIPE["pipelines and tracking"]
         direction LR
-        AF["Apache Airflow 3.3.1, LocalExecutor<br/>DAGs: ingest_month · train_and_register · monitor<br/><i>GCP: Cloud Composer 3</i>"]
-        MLF["MLflow 3.16.1<br/>experiment tracking + model registry<br/><i>GCP: Vertex AI Experiments + Registry</i>"]
-        FEAST["Feast 0.66.0<br/>offline: Parquet · online: PostgreSQL<br/><i>GCP: Vertex AI Feature Store</i>"]
+        AF["Apache Airflow 3.3.1, LocalExecutor<br/>DAGs: ingest_month · train_and_register · monitor<br/>↳ GCP: Cloud Composer 3"]
+        MLF["MLflow 3.16.1<br/>experiment tracking + model registry<br/>↳ GCP: Vertex AI Experiments + Registry"]
+        FEAST["Feast 0.66.0<br/>offline: Parquet · online: PostgreSQL<br/>↳ GCP: Vertex AI Feature Store"]
       end
 
       subgraph SERVE["serving"]
         direction LR
-        API["newsflow model service<br/>FastAPI + the registered model<br/>POST /v1/categorize · /healthz · /readyz<br/><i>GCP: GKE behind an internal load balancer</i>"]
-        VLLM["vLLM 0.30.0, CPU image (Lab 3)<br/>OpenAI-compatible, abstained slice only<br/><i>GCP: Vertex AI generative AI</i>"]
+        API["newsflow model service<br/>FastAPI + the registered model<br/>POST /v1/categorize · /healthz · /readyz<br/>↳ GCP: GKE behind an internal load balancer"]
+        VLLM["vLLM 0.30.0, CPU image (Lab 3)<br/>OpenAI-compatible, abstained slice only<br/>↳ GCP: Vertex AI generative AI"]
       end
 
       subgraph OBS["observability"]
         direction LR
-        EV["Evidently — drift and quality reports<br/><i>GCP: Vertex AI Model Monitoring</i>"]
-        PROM["Prometheus + Grafana<br/>latency, error rate, fallback budget, model age<br/><i>GCP: Cloud Monitoring</i>"]
+        EV["Evidently — drift and quality reports<br/>↳ GCP: Vertex AI Model Monitoring"]
+        PROM["Prometheus + Grafana<br/>latency, error rate, fallback budget, model age<br/>↳ GCP: Cloud Monitoring"]
       end
 
-      REG["image registry: Minikube built-in registry / Docker Hub<br/><i>GCP: Artifact Registry</i>"]
+      REG["image registry: Minikube built-in registry / Docker Hub<br/>↳ GCP: Artifact Registry"]
     end
 
     AF --> MINIO

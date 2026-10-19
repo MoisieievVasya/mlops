@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+
+# Environment
+.env
+.env.local
+
+# Data (tracked by DVC from Lab 2 onwards, never by Git)
+data/
+!data/.gitkeep
+*.parquet
+*.csv
+*.json.gz
+
+# Local service state
+mlruns/
+minio-data/
+airflow-home/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store

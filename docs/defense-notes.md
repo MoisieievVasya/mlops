@@ -238,7 +238,7 @@ and clones get slow. LFS replaces the file in the tree with a small pointer and 
 LFS server, fetched on checkout. It fixes repository size — and nothing else.
 
 **DVC over Git LFS:** three things LFS has no concept of. (1) The remote is **any object store you
-own** — S3, GCS, MinIO — not a quota on your Git host. (2) **Pipelines**: `dvc.yaml` declares
+own** — MinIO, or any object store the platform can mount — not a quota on your Git host. (2) **Pipelines**: `dvc.yaml` declares
 stage dependencies and outputs, so `dvc repro` rebuilds only what changed and the data has a
 *lineage graph*, not just a version. (3) **Content-addressed deduplication across versions**, so
 re-ingesting an unchanged month costs nothing.
@@ -272,43 +272,51 @@ the first symptom would have been M5 firing weeks later on a model trained on ga
 
 ### 16. Name the components of your deployment diagram and their managed services. Pick one and say what you lose and gain. `*`
 
-| Component | AWS |
+| Component | Managed equivalent on Databricks |
 | --- | --- |
-| MinIO-compatible object store (`pgsty/silo`) | Amazon S3 |
-| DVC 3.67.1 + dvc-s3 | S3 remote |
-| PostgreSQL 16 | Amazon RDS for PostgreSQL |
-| Apache Airflow 3.3.1, LocalExecutor | Amazon MWAA |
-| MLflow 3.16.1 | SageMaker with MLflow |
-| Feast 0.66.0 | SageMaker Feature Store |
-| `newsflow` model service (FastAPI) | EKS behind an internal ALB |
-| vLLM 0.30.0 | Amazon Bedrock |
-| Evidently | SageMaker Model Monitor |
-| Prometheus + Grafana | Amazon CloudWatch |
-| Minikube registry / Docker Hub | Amazon ECR |
+| MinIO-compatible object store (`pgsty/silo`) | Unity Catalog volumes |
+| DVC 3.67.1 | Delta Lake time travel — **replaces** DVC |
+| PostgreSQL 16 | Delta tables + SQL warehouse; Online Tables for the online feature path |
+| Apache Airflow 3.3.1, LocalExecutor | Databricks Workflows (Jobs) |
+| MLflow 3.16.1 | MLflow in Unity Catalog — native |
+| Feast 0.66.0 | Feature Engineering in Unity Catalog |
+| `newsflow` model service (FastAPI) | Mosaic AI Model Serving — **no cluster** |
+| vLLM 0.30.0 | Foundation Model APIs |
+| Evidently | Lakehouse Monitoring |
+| Prometheus + Grafana | System tables + DBSQL dashboards |
+| Minikube registry / Docker Hub | **n/a** — the runtime is managed |
 
-**Taking Airflow → MWAA.**
+Two rows go to *n/a*, and a reviewer should ask about that: the platform removes the container
+registry and the Kubernetes cluster, which is why 6.7 is the cheapest of the three variants and also
+what 7.1 A6 holds against it.
 
-*Gain:* no scheduler, webserver or metadata database to operate or patch; managed upgrades; worker
-autoscaling; IAM-native access to S3 and RDS; someone else is paged when the scheduler wedges.
+**Taking Airflow → Databricks Workflows.**
 
-*Lose:* **$360/month — 43% of the entire estimate (6.7) — to run roughly sixty short jobs**, because
-you rent a 24/7 environment regardless of use. The identical orchestrator no longer runs on a
-laptop, which is what makes Lab 2 reproducible from a clean clone. Provider and plugin versions move
-to Amazon's schedule, not `uv.lock`'s. And the DAG edit loop becomes an S3 sync instead of a restart.
+*Gain:* **$7/month instead of the $360–400 every hyperscaler charges for a 24/7 managed-Airflow
+environment** (6.7), because Jobs Compute is billed per run and this system runs sixty short jobs a
+month. No scheduler, webserver or metadata database to operate or patch. The job, the notebook, the
+tracking server and the registry share one identity model instead of four.
 
-For this workload the trade is bad, which is why 6.7 recommends Airflow as pods on the EKS cluster
-that already exists — and why [`infra-variants.md`](infra-variants.md) shows Databricks Workflows
-doing the same sixty runs for ~$7.
+*Lose:* the DAG is no longer an Airflow DAG. Workflows is a different orchestrator with a different
+task model, so the local `ingest_month` DAG and its cloud counterpart stop being the same artifact —
+the fidelity loss named in 6.2 and argued in 7.1 A6. Scheduling expressiveness is narrower than
+Airflow's sensors and branching. And the platform owns the runtime version, not `uv.lock`.
+
+The trade is good on cost and bad on fidelity, which is exactly the shape of the whole platform
+decision — and why 7.1 A6 calls it narrow.
 
 ### 17. Your cost estimate turns out to be ten times too low. Which assumption was wrong, and which requirement would you relax first? `*`
 
 **The volume assumption — 2,000 articles/day — not the rates.** Rates are listed numbers; volume is
 a guess about a product that does not exist yet, and it multiplies the only lines that scale.
 
-At 20,000/day the bill does **not** become $8,400, and knowing why is the point: roughly **$600 of
-the $840 is fixed infrastructure** — MWAA, EKS, RDS, the MLflow server — that does not care about
-volume. Bedrock goes ~$70 → ~$700, the node group doubles, RDS moves a size, CloudWatch log volume
-scales linearly. Realistic total ≈ **$2,000–2,500**.
+At 20,000/day the bill does **not** become $5,100 — but the answer here is less comfortable than on
+a component stack, and knowing why is the point. **Only ~$230 of this estimate is fixed**; the rest
+scales. Foundation Model APIs go ~$70 → ~$700, Model Serving moves Small → Medium (≈ 4 → 16 DBU/hr)
+~$204 → ~$816, jobs compute ~$7 → ~$20. Realistic total ≈ **$1,600–1,900**. A component stack, where
+~$600 is fixed, absorbs the same growth into capacity it was already paying for — so this platform is
+cheapest at today's volume and **scales more steeply**. The crossover is a reason to re-price at a 5×
+volume change, not a reason to have chosen differently.
 
 **First requirement relaxed: the Lab 3 LLM assist on *every* abstained article** (4.2, cost row).
 Restrict it to the lowest-confidence decile — roughly a 75% cut of the largest variable line for a

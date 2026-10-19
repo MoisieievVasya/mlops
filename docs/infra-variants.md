@@ -43,26 +43,26 @@ rates; the absolute totals are not.
 Rows are the components named in `design.md` 6.1. Two rows are the whole story — look at where
 Databricks says *n/a*.
 
-| Component (6.1) | **AWS** (chosen) | **GCP** | **Databricks** |
+| Component (6.1) | **Databricks** (chosen) | AWS | GCP |
 | --- | --- | --- | --- |
-| Object storage / data lake | Amazon S3 | Cloud Storage | Unity Catalog volumes — still S3/GCS underneath, billed by the cloud |
-| Data versioning | DVC remote on S3 | DVC remote on GCS | **Delta Lake table history + time travel** — replaces DVC rather than hosting it |
-| Warehouse / serving DB | RDS for PostgreSQL | Cloud SQL for PostgreSQL | Delta tables + SQL warehouse. **No PostgreSQL**: the online feature path needs Databricks Online Tables or an external store |
-| Orchestrator | Amazon MWAA | Cloud Composer 3 | **Databricks Workflows (Jobs)** |
-| Experiment tracking + registry | SageMaker with MLflow | Vertex AI Experiments + Model Registry | **MLflow in Unity Catalog** — native; Databricks authors MLflow |
-| Feature store | SageMaker Feature Store | Vertex AI Feature Store | Feature Engineering in UC + Online Tables |
-| Container registry | Amazon ECR | Artifact Registry | **n/a** — no image to push; the runtime is managed |
-| Kubernetes cluster | Amazon EKS | GKE Standard | **n/a** — no cluster; Model Serving is managed |
-| Model and data monitoring | SageMaker Model Monitor | Vertex AI Model Monitoring | Lakehouse Monitoring |
-| Metrics and dashboards | CloudWatch | Cloud Monitoring | System tables + DBSQL dashboards |
-| Vector store (Lab 3) | OpenSearch Serverless | Vertex AI Vector Search | Mosaic AI Vector Search |
-| LLM inference (Lab 3) | Amazon Bedrock | Vertex AI generative AI | Foundation Model APIs |
+| Object storage / data lake | Unity Catalog volumes — still S3/GCS underneath, billed by the cloud | Amazon S3 | Cloud Storage |
+| Data versioning | **Delta Lake table history + time travel** — replaces DVC rather than hosting it | DVC remote on S3 | DVC remote on GCS |
+| Warehouse / serving DB | Delta tables + SQL warehouse. **No PostgreSQL**: the online feature path needs Databricks Online Tables or an external store | RDS for PostgreSQL | Cloud SQL for PostgreSQL |
+| Orchestrator | **Databricks Workflows (Jobs)** | Amazon MWAA | Cloud Composer 3 |
+| Experiment tracking + registry | **MLflow in Unity Catalog** — native; Databricks authors MLflow | SageMaker with MLflow | Vertex AI Experiments + Model Registry |
+| Feature store | Feature Engineering in UC + Online Tables | SageMaker Feature Store | Vertex AI Feature Store |
+| Container registry | **n/a** — no image to push; the runtime is managed | Amazon ECR | Artifact Registry |
+| Kubernetes cluster | **n/a** — no cluster; Model Serving is managed | Amazon EKS | GKE Standard |
+| Model and data monitoring | Lakehouse Monitoring | SageMaker Model Monitor | Vertex AI Model Monitoring |
+| Metrics and dashboards | System tables + DBSQL dashboards | CloudWatch | Cloud Monitoring |
+| Vector store (Lab 3) | Mosaic AI Vector Search | OpenSearch Serverless | Vertex AI Vector Search |
+| LLM inference (Lab 3) | Foundation Model APIs | Amazon Bedrock | Vertex AI generative AI |
 
 ---
 
-## 2 Cost — AWS (the chosen column)
+## 2 Cost — AWS variant
 
-Unchanged from `design.md` 6.7, repeated here so the three totals sit side by side.
+A component-stack alternative. Repeated here so the three totals sit side by side.
 `us-east-1`, on-demand list, no Savings Plans, no free tier.
 
 | Line | Size assumed | $/mo |
@@ -114,7 +114,7 @@ taken on the vector-store row, brings GCP to **≈ $742**.
 
 ---
 
-## 4 Cost — Databricks variant
+## 4 Cost — Databricks (the chosen column)
 
 Premium tier on AWS `us-east`. DBU rates are reported; DBU *consumption* is my assumption.
 

@@ -476,7 +476,7 @@ would be marked "not needed" with a reason here; none is.
 
 #### Diagram 3 — Deployment, first draft
 
-Local components with the managed AWS service named next to each. *Lab 4 replaces this diagram with
+Local components with the managed GCP service named next to each. *Lab 4 replaces this diagram with
 the real cluster topology, so there is no Kubernetes vocabulary here yet.*
 
 ```mermaid
@@ -486,31 +486,31 @@ flowchart TB
 
       subgraph STORE["storage and state"]
         direction LR
-        MINIO["MinIO-compatible object store<br/>pgsty/silo RELEASE.2026-09-16<br/>raw · interim · features · MLflow artifacts<br/><i>AWS: Amazon S3</i>"]
-        PG["PostgreSQL 16<br/>MLflow backend · Feast registry and online store<br/>serving log · pgvector 0.8.7 (Lab 3)<br/><i>AWS: Amazon RDS for PostgreSQL</i>"]
-        DVC["DVC 3.67.1 + dvc-s3 3.3.0<br/>remote pointing at the object store<br/><i>AWS: S3 remote</i>"]
+        MINIO["MinIO-compatible object store<br/>pgsty/silo RELEASE.2026-09-16<br/>raw · interim · features · MLflow artifacts<br/><i>GCP: Cloud Storage</i>"]
+        PG["PostgreSQL 16<br/>MLflow backend · Feast registry and online store<br/>serving log · pgvector 0.8.7 (Lab 3)<br/><i>GCP: Cloud SQL for PostgreSQL</i>"]
+        DVC["DVC 3.67.1 + dvc-s3 3.3.0<br/>remote pointing at the object store<br/><i>GCP: GCS remote</i>"]
       end
 
       subgraph PIPE["pipelines and tracking"]
         direction LR
-        AF["Apache Airflow 3.3.1, LocalExecutor<br/>DAGs: ingest_month · train_and_register · monitor<br/><i>AWS: Amazon MWAA</i>"]
-        MLF["MLflow 3.16.1<br/>experiment tracking + model registry<br/><i>AWS: SageMaker with MLflow</i>"]
-        FEAST["Feast 0.66.0<br/>offline: Parquet · online: PostgreSQL<br/><i>AWS: SageMaker Feature Store</i>"]
+        AF["Apache Airflow 3.3.1, LocalExecutor<br/>DAGs: ingest_month · train_and_register · monitor<br/><i>GCP: Cloud Composer 3</i>"]
+        MLF["MLflow 3.16.1<br/>experiment tracking + model registry<br/><i>GCP: Vertex AI Experiments + Registry</i>"]
+        FEAST["Feast 0.66.0<br/>offline: Parquet · online: PostgreSQL<br/><i>GCP: Vertex AI Feature Store</i>"]
       end
 
       subgraph SERVE["serving"]
         direction LR
-        API["newsflow model service<br/>FastAPI + the registered model<br/>POST /v1/categorize · /healthz · /readyz<br/><i>AWS: EKS behind an ALB</i>"]
-        VLLM["vLLM 0.30.0, CPU image (Lab 3)<br/>OpenAI-compatible, abstained slice only<br/><i>AWS: Amazon Bedrock</i>"]
+        API["newsflow model service<br/>FastAPI + the registered model<br/>POST /v1/categorize · /healthz · /readyz<br/><i>GCP: GKE behind an internal load balancer</i>"]
+        VLLM["vLLM 0.30.0, CPU image (Lab 3)<br/>OpenAI-compatible, abstained slice only<br/><i>GCP: Vertex AI generative AI</i>"]
       end
 
       subgraph OBS["observability"]
         direction LR
-        EV["Evidently — drift and quality reports<br/><i>AWS: SageMaker Model Monitor</i>"]
-        PROM["Prometheus + Grafana<br/>latency, error rate, fallback budget, model age<br/><i>AWS: Amazon CloudWatch</i>"]
+        EV["Evidently — drift and quality reports<br/><i>GCP: Vertex AI Model Monitoring</i>"]
+        PROM["Prometheus + Grafana<br/>latency, error rate, fallback budget, model age<br/><i>GCP: Cloud Monitoring</i>"]
       end
 
-      REG["image registry: Minikube built-in registry / Docker Hub<br/><i>AWS: Amazon ECR</i>"]
+      REG["image registry: Minikube built-in registry / Docker Hub<br/><i>GCP: Artifact Registry</i>"]
     end
 
     AF --> MINIO
@@ -539,18 +539,19 @@ image registry. That is the complete list, in both directions.
 
 ### 6.2 Infra
 
-Local stack, pinned to the course reference stack, with the managed AWS service for the same job.
-AWS is the named cloud column throughout; GCP and Azure equivalents are given for completeness.
-Naming them is required; running on them is not.
+Local stack, pinned to the course reference stack, with the managed **Google Cloud** service for the
+same job. Naming them is required; running on them is not — Labs 2–4 run entirely on the local
+column, and the cloud column states where each component would go in production.
 
-**Why AWS is the named column.** AWS is named because it is the column the course reference material
-is written against, and because committing to one vendor makes 6.7 a real number instead of a range.
-The GCP and Databricks variants were priced before that commitment and are in
-**[`infra-variants.md`](infra-variants.md)**; the headline result is that GCP is ~15% *more*
-expensive (Cloud Composer 3 is worse than MWAA, and Vertex AI Feature Store bills an always-on node
-where SageMaker bills per operation), and that Databricks is ~40% cheaper for reasons argued in
-7.1 A6. The one place the vendor choice bites inside this table is the vector store row, argued
-below.
+**Why GCP.** The alternatives were priced before this was settled; the comparison is in
+**[`infra-variants.md`](infra-variants.md)**. GCP is *not* the cheapest option, so the choice is made
+on fit rather than price: Vertex AI keeps the model registry free and bills only for deployed
+endpoints, GKE's control plane is covered by a standing monthly credit where other managed
+Kubernetes services charge for it, and the Vertex AI surface maps one-to-one onto the components of
+6.1 without collapsing any of them — which matters because the version point, the quality gate and
+the point-in-time join are the things Labs 2 and 4 exist to demonstrate. Where this platform is
+expensive it is expensive in two specific, avoidable lines, and both are taken as explicit
+divergences below rather than paid.
 
 **Why the stack is assembled from components rather than bought as a platform.** The alternative —
 one ML platform covering orchestration, tracking, registry, feature store and compute — is argued
@@ -558,26 +559,35 @@ and rejected in **7.1 A6 (Databricks)** and **7.1 A3 (AutoML)**. The short versi
 tooling solves a problem a 90 MB monthly batch does not have, and a managed platform has no laptop
 equivalent, which Labs 2–4 require.
 
-| Component (6.1) | Local, pinned | AWS | GCP | Azure |
-| --- | --- | --- | --- | --- |
-| Object storage / data lake | MinIO-compatible, `pgsty/silo:RELEASE.2026-09-16T00-00-00Z` | [Amazon S3](https://docs.aws.amazon.com/s3/) | Cloud Storage | Blob Storage |
-| Data versioning remote | DVC `3.67.1` with `dvc-s3 3.3.0`, remote on the object store | S3 remote | GCS remote | Azure Blob remote |
-| Warehouse / serving database | PostgreSQL `16` | [Amazon RDS for PostgreSQL](https://docs.aws.amazon.com/rds/) | Cloud SQL | Azure Database for PostgreSQL |
-| Orchestrator | Apache Airflow `3.3.1`, LocalExecutor | [Amazon MWAA](https://docs.aws.amazon.com/mwaa/) | Cloud Composer | Azure Data Factory |
-| Experiment tracking and model registry | MLflow `3.16.1`, PostgreSQL backend, MinIO artifacts | [SageMaker with MLflow](https://docs.aws.amazon.com/sagemaker/latest/dg/mlflow.html) | Vertex AI Experiments + Model Registry | Azure ML with MLflow |
-| Feature store | Feast `0.66.0` | [SageMaker Feature Store](https://docs.aws.amazon.com/sagemaker/latest/dg/feature-store.html) | Vertex AI Feature Store | Azure ML managed feature store |
-| Container registry | Minikube built-in registry / Docker Hub | [Amazon ECR](https://docs.aws.amazon.com/ecr/) | Artifact Registry | Azure Container Registry |
-| Kubernetes cluster | Minikube `1.33.1` (Kubernetes `1.30.0`, docker driver, 4 GB) | [Amazon EKS](https://docs.aws.amazon.com/eks/) | GKE | AKS |
-| Model and data monitoring | Evidently | [SageMaker Model Monitor](https://docs.aws.amazon.com/sagemaker/latest/dg/model-monitor.html) | Vertex AI Model Monitoring | Azure ML model monitoring |
-| Metrics store and dashboards | Prometheus + Grafana | [Amazon CloudWatch](https://docs.aws.amazon.com/cloudwatch/) | Cloud Monitoring | Azure Monitor |
-| Vector store (Lab 3) | `pgvector 0.8.7` in the same PostgreSQL | [OpenSearch Serverless vector search](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless.html) | Vertex AI Vector Search | Azure AI Search |
-| LLM inference (Lab 3) | vLLM `0.30.0`, CPU image | [Amazon Bedrock](https://docs.aws.amazon.com/bedrock/) | Vertex AI generative AI | Azure OpenAI |
+| Component (6.1) | Local reference, pinned | Managed equivalent on GCP |
+| --- | --- | --- |
+| Object storage / data lake | MinIO-compatible, `pgsty/silo:RELEASE.2026-09-16T00-00-00Z` | [Cloud Storage](https://cloud.google.com/storage/docs) |
+| Data versioning remote | DVC `3.67.1` with `dvc-s3 3.3.0` — the S3 *protocol*, which MinIO speaks | [GCS remote](https://dvc.org/doc/user-guide/data-management/remote-storage/google-cloud-storage) via `dvc-gs` |
+| Warehouse / serving database | PostgreSQL `16` | [Cloud SQL for PostgreSQL](https://cloud.google.com/sql/docs/postgres) |
+| Orchestrator | Apache Airflow `3.3.1`, LocalExecutor | [Cloud Composer 3](https://cloud.google.com/composer/docs) |
+| Experiment tracking and model registry | MLflow `3.16.1`, PostgreSQL backend, MinIO artifacts | [Vertex AI Experiments](https://cloud.google.com/vertex-ai/docs/experiments/intro-vertex-ai-experiments) + [Model Registry](https://cloud.google.com/vertex-ai/docs/model-registry/introduction) |
+| Feature store | Feast `0.66.0` | [Vertex AI Feature Store](https://cloud.google.com/vertex-ai/docs/featurestore) |
+| Container registry | Minikube built-in registry / Docker Hub | [Artifact Registry](https://cloud.google.com/artifact-registry/docs) |
+| Kubernetes cluster | Minikube `1.33.1` (Kubernetes `1.30.0`, docker driver, 4 GB) | [GKE Standard](https://cloud.google.com/kubernetes-engine/docs) |
+| Model and data monitoring | Evidently | [Vertex AI Model Monitoring](https://cloud.google.com/vertex-ai/docs/model-monitoring/overview) |
+| Metrics store and dashboards | Prometheus + Grafana | [Cloud Monitoring](https://cloud.google.com/monitoring/docs) |
+| Vector store (Lab 3) | `pgvector 0.8.7` in the same PostgreSQL | [Vertex AI Vector Search](https://cloud.google.com/vertex-ai/docs/vector-search/overview) |
+| LLM inference (Lab 3) | vLLM `0.30.0`, CPU image | [Vertex AI generative AI](https://cloud.google.com/vertex-ai/generative-ai/docs) |
 
-**One deliberate divergence.** The vector store row is the only place where the cloud design does
-*not* follow the reference column: `pgvector` lives in the PostgreSQL instance that already exists,
-and the managed equivalent (OpenSearch Serverless) has a minimum-capacity floor that costs roughly
-as much as the entire rest of the stack (6.7). The managed service would buy scale we do not need at
-~200k documents. Named, priced, and rejected with a reason.
+**Two deliberate divergences.** Both rows are named above, priced in 6.7, and then *not* used —
+which is a different thing from not knowing about them.
+
+1. **Vector store.** `pgvector` lives inside the Cloud SQL instance that already exists. Vertex AI
+   Vector Search keeps an always-on index serving node, buying approximate-nearest-neighbour scale
+   we do not need at ~200k short documents and billing for it around the clock.
+2. **Feature store.** Feast runs against that same Cloud SQL instance. Vertex AI Feature Store
+   charges roughly **$219/month for one always-on optimized online serving node** (6.7) to serve a
+   single 17-element vector per author at ~60k lookups a month. It is priced for a feature platform;
+   we have one online feature.
+
+Together the two divergences are ~$219/month of the 6.7 estimate and cost nothing in capability at
+this scale. If either assumption breaks — a second feature group, or a corpus past a few million
+documents — the managed service is the named upgrade path, not a redesign.
 
 ### 6.3 Performance
 
@@ -616,7 +626,7 @@ burst, sized for the failure of one. Batch re-scoring: 14,000 articles ÷ 50/s �
 
 - **Secrets.** Locally in a `.env` that is in `.gitignore`; a committed `.env.example` lists the keys
   with empty values. Nothing — no MinIO root credentials, no Postgres password, no Kaggle token, no
-  LLM API key — is ever committed. In the cloud design: AWS Secrets Manager, injected as environment
+  LLM API key — is ever committed. In the cloud design: Google Secret Manager, injected as environment
   variables at pod start, rotated **Assumption: every 90 days**. The pre-commit hook chain is the
   first gate; adding a secret scanner to it is a Lab 2 task.
 - **Who may call the service.** `POST /v1/categorize` is **not** publicly reachable. Two callers
@@ -645,7 +655,7 @@ burst, sized for the failure of one. Batch re-scoring: 14,000 articles ÷ 50/s �
   year-over-year seasonal comparison and no longer. Hashed author aggregates: 24 months. Lab 5 agent
   traces, which may name the editor who acted: **90 days**.
 - **What leaves the machine.** In Labs 1–2, nothing. In Lab 3, article text is sent to the LLM
-  endpoint; with the local vLLM it stays on the machine, and the cloud design names Bedrock, where
+  endpoint; with the local vLLM it stays on the machine, and the cloud design names Vertex AI, where
   the article text — public content, no personal data beyond the byline, which is stripped before the
   prompt is built — is sent to a managed model. This is stated because "where does the text go" is
   the question a reviewer should be able to answer from this document.
@@ -697,62 +707,66 @@ on it trains everyone to ignore alerts.
 
 ### 6.7 Cost
 
-Monthly estimate for the **AWS** column of 6.2, built on the [AWS Pricing
-Calculator](https://calculator.aws/). The system runs locally, so this is a design-time estimate, not
-a bill.
+Monthly estimate for the **GCP** column of 6.2. The system runs locally, so this is a design-time
+estimate, not a bill.
 
-**Assumptions:** `us-east-1`; on-demand list prices, no Savings Plans, no free tier; 2,000
-articles/day = 60,000 predictions/month; 50 GB in object storage growing ~2 GB/month; one Airflow
-environment with ~60 DAG runs/month; two application nodes; the LLM assist runs on the 40% abstained
-slice at ~1,500 input and ~300 output tokens per call on a Haiku-class model.
+**Assumptions:** `us-central1`; on-demand list prices, no committed-use discounts, no free tier
+beyond the standing GKE control-plane credit; 2,000 articles/day = 60,000 predictions/month; 50 GB
+in object storage growing ~2 GB/month; one Composer environment running ~60 DAG runs/month; two
+application nodes; the LLM assist on the 40% abstained slice at ~1,500 input and ~300 output tokens
+per call on a Flash-class model.
 
-| Component | AWS service, size assumed | $/month |
+| Component | GCP service, size assumed | $/month |
 | --- | --- | --- |
-| Object storage | S3 Standard, 50 GB + ~2M requests | 3 |
-| Warehouse / serving DB | RDS PostgreSQL `db.t4g.medium`, 100 GB gp3, single-AZ, 7-day backups | 65 |
-| Orchestrator | **MWAA `mw1.small`, 1 environment, 24/7** | **360** |
-| Experiment tracking + registry | SageMaker with MLflow, `ml.t3.medium` tracking server, 24/7 | 45 |
-| Feature store | SageMaker Feature Store, 60k writes + ~1.8M reads, 5 GB offline | 25 |
-| Kubernetes cluster | EKS control plane + 2 × `t3.large` on-demand + 100 GB gp3 | 200 |
-| Container registry | ECR, 10 GB | 1 |
-| Model and data monitoring | SageMaker Model Monitor, ~60 jobs on `ml.m5.xlarge` | 10 |
-| Metrics and dashboards | CloudWatch, ~25 custom metrics + 5 GB logs | 20 |
-| Vector store | **pgvector inside the RDS instance above** | **0** |
-| LLM inference (Lab 3) | Bedrock, 24,000 calls × (1.5k in / 0.3k out), Haiku-class | 70 |
-| Networking | NAT gateway + modest egress | 40 |
-| | **Total** | **≈ $840** |
+| Object storage | Cloud Storage Standard, 50 GB + ~2M operations | 3 |
+| Warehouse / serving DB | Cloud SQL for PostgreSQL, Enterprise, 2 vCPU / 4 GB, 100 GB SSD | 98 |
+| Orchestrator | **Cloud Composer 3, small environment, 24/7** | **400** |
+| Experiment tracking + registry | Vertex AI Experiments + Model Registry — the registry is free; metadata storage only | 5 |
+| Feature store | **Vertex AI Feature Store, 1 optimized online serving node, 24/7** | **219** |
+| Container registry | Artifact Registry, 10 GB | 1 |
+| Kubernetes cluster | GKE Standard — control plane $73 **less the $74.40 monthly credit = $0** + 2 × `e2-standard-2` + 100 GB PD | 115 |
+| Model and data monitoring | Vertex AI Model Monitoring, ~60 jobs | 10 |
+| Metrics and dashboards | Cloud Monitoring, ~25 custom metrics + 5 GB logs | 20 |
+| Vector store | **pgvector inside the Cloud SQL instance above** — divergence 1 | **0** |
+| LLM inference (Lab 3) | Vertex AI generative AI, 24,000 calls × (1.5k in / 0.3k out), Flash-class | 50 |
+| Networking | Cloud NAT + modest egress | 40 |
+| | **Total, managed services as listed** | **≈ $961** |
+| | **With both divergences of 6.2 taken** | **≈ $742** |
 
-**The two numbers worth arguing about.**
+**The three numbers worth arguing about.**
 
-1. **MWAA is 43% of the bill** and it orchestrates ~60 short runs a month. Running Airflow as pods on
-   the EKS cluster that already exists removes ~$340/month and adds operational work we are already
-   doing locally. For a system of this size, **self-managed Airflow on EKS is the right call** and
-   MWAA is named here because the reference table names it.
-2. **OpenSearch Serverless would be ~$700/month** at its minimum capacity floor — alone, nearly the
-   whole rest of the stack — to index ~200k short documents that `pgvector` holds comfortably in a
-   database we are already paying for. This is why 6.2 diverges on that one row.
+1. **Cloud Composer 3 is ~42% of the bill** — a 24/7 environment fee to run roughly sixty short jobs
+   a month. Running Airflow as pods on the GKE cluster that already exists removes ~$380/month and
+   adds operational work we already do locally. For a system this size, **self-managed Airflow on
+   GKE is the right call**; Composer is named because 6.2 must name the managed service.
+2. **Vertex AI Feature Store at ~$219** bills an always-on online serving node to serve one
+   17-element vector. This is divergence 2 of 6.2 and the reason the second total row exists.
+3. **The GKE control plane is genuinely free here** — the standing **$74.40/month credit** covers one
+   zonal cluster, where other managed Kubernetes services charge ~$73/month for the same thing. It is
+   the one line where this platform undercuts the alternatives, and it nowhere near offsets the
+   first two.
 
 **Sensitivity — where a 10× error would come from.** The volume assumption, not the prices. At
-20,000 articles/day instead of 2,000: Bedrock → ~$700, the node group doubles, RDS moves a size,
-CloudWatch log volume scales linearly. Total ≈ $2,000–2,500, not $8,400 — because ~$600 of the
-estimate is fixed-cost infrastructure that does not care about volume. **The first requirement to
-relax under that pressure is the LLM assist on every abstained article** (restrict it to the lowest-
-confidence decile), followed by the 13-month serving-log retention. The ceiling in 4.2 is the trigger
-for that conversation.
+20,000 articles/day instead of 2,000: Vertex AI generative AI → ~$500, the node group doubles, Cloud
+SQL moves a size, Cloud Monitoring log volume scales linearly. Total ≈ $2,100–2,600, **not $9,600**,
+because roughly $750 of the estimate is fixed-cost infrastructure that does not care about volume.
+**The first requirement to relax under that pressure is the LLM assist on every abstained article**
+(restrict it to the lowest-confidence decile), followed by the 13-month serving-log retention. The
+ceiling in 4.2 is the trigger for that conversation.
 
-**Cross-cloud check.** The same workload priced on GCP and on Databricks is in
-[`infra-variants.md`](infra-variants.md): **GCP ≈ $961, AWS ≈ $840, Databricks ≈ $510**. Databricks
-is genuinely the cheapest, and the reason is the point made in the paragraph above — it has neither a
-managed-Airflow line nor a Kubernetes line, which together are **$560 of this estimate**. Priced
-against a *cost-optimised* AWS instead of the reference stack (Airflow and MLflow as pods on the EKS
-cluster that already exists), AWS lands at **≈ $455** and the gap closes to noise. The decision not
-to use Databricks is made in 7.1 A6 and is not a cost decision.
+**Cross-platform check.** The alternatives are priced in [`infra-variants.md`](infra-variants.md).
+**Databricks comes to ≈ $510** against this column's $961, for the reason given in point 1: it has
+neither a managed-Airflow line nor a Kubernetes line, which here are **$515 together**. Against a
+*cost-optimised* build of this same column — Airflow as pods on the GKE cluster that already exists,
+Feast on the Cloud SQL instance already paid for — this column lands at **≈ $410**, below Databricks.
+The gap is a consequence of naming managed services, not of the platform. The decision not to use
+Databricks is made in 7.1 A6 and is not a cost decision either way.
 
-**Provenance.** The rates in this section are design-time estimates. The providers' calculators could
-not be opened from the environment this document was written in — see section 0 of
-[`infra-variants.md`](infra-variants.md) — so every total here should be re-derived on
-[calculator.aws](https://calculator.aws/) before it is quoted as a number rather than an order of
-magnitude.
+**Provenance.** The rates here are design-time estimates. The vendor pricing pages could not be
+opened from the environment this document was written in — see section 0 of
+[`infra-variants.md`](infra-variants.md) — so every total should be re-derived on the
+[Google Cloud pricing calculator](https://cloud.google.com/products/calculator) before it is quoted
+as a number rather than an order of magnitude.
 
 ### 6.8 Integration points
 
@@ -813,7 +827,7 @@ has no good neighbours — which is the drift case the system exists to handle.
 *Rejected* as the primary path; **kept** as the retrieval half of the Lab 3 assist, where "here are
 the nearest precedents" is exactly what an editor wants to see.
 
-**A3 — Managed end-to-end AutoML (SageMaker Autopilot / Vertex AutoML) instead of a built pipeline.**
+**A3 — Managed end-to-end AutoML (Vertex AI AutoML) instead of a built pipeline.**
 *Pros:* much less code; tuning, serving and some monitoring come for free; probably a better model
 than the baseline for less effort.
 *Cons:* the artifact is not reproducible from a clean clone on a laptop, which is the first row of
@@ -843,7 +857,7 @@ list has 17 slots, not 42.
 
 **A6 — Databricks as the cloud platform, instead of a per-component managed stack.**
 *Pros:* one platform covers the orchestrator, the tracking server, the model registry, the feature
-store and the compute, so section 6.2 would be one row instead of twelve. Delta Lake gives ACID
+store and the compute, so section 6.2 would be one row instead of eleven. Delta Lake gives ACID
 tables and time travel on the lake, which is a genuinely better version of what DVC does here.
 MLflow is Databricks' own project, so the tracking-and-registry row maps there more naturally than
 anywhere else — this is the strongest argument for the option. Spark would remove any future ceiling
@@ -859,14 +873,16 @@ Databricks workspace has no laptop-sized equivalent, so Labs 2–4 could not run
 **(3) It hides what is being graded** — collapsing the version point, the quality gate and the
 point-in-time join into a managed platform is the same objection that rejects A3, and it applies
 with more force here because more components disappear at once.
-*On cost, the alternative wins and that is conceded.* Priced out in
-[`infra-variants.md`](infra-variants.md), Databricks comes to **≈ $510/month against AWS at ≈ $840
-and GCP at ≈ $961** — roughly 40% cheaper. It wins on exactly the two rows where it offers nothing:
-no managed-Airflow environment fee (MWAA $360, Composer $400, Databricks Workflows ~$7 for the same
-~60 short job runs) and no Kubernetes cluster (EKS $200, GKE $115). Those two lines are **$560 of
-the AWS estimate — always-on capacity that is idle almost all the time.** The cost advantage is real
-and it is the same fact as the objection: Databricks is cheaper *because* it removes the components
-Labs 2 and 4 exist to make us build.
+*On cost, the alternative wins against the listed column and that is conceded.* Priced in
+[`infra-variants.md`](infra-variants.md), Databricks comes to **≈ $510/month against this column's
+≈ $961** — roughly 45% cheaper as listed. It wins on exactly the two rows where it offers nothing:
+no managed-Airflow environment fee (Cloud Composer 3 at $400 against Databricks Workflows at ~$7 for
+the same ~60 short job runs) and no Kubernetes cluster (GKE $115). Those two lines are **$515 of the
+estimate — always-on capacity idle almost all the time.** The cost advantage is real and it is the
+same fact as the objection: Databricks is cheaper *because* it removes the components Labs 2 and 4
+exist to make us build. Taking the two divergences of 6.2 and self-hosting Airflow on the cluster
+that already exists brings this column to **≈ $410**, below Databricks — so the listed gap is a
+consequence of naming managed services, not of the platform.
 *Rejected on reproducibility, not on price.* Databricks is the right answer at terabyte scale, on an
 existing lakehouse, with a streaming path, or where Delta Lake's ACID guarantees are a requirement.
 At 90 MB of monthly batch text it buys scale we do not need, and it cannot run on the laptop that

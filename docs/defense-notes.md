@@ -238,7 +238,7 @@ and clones get slow. LFS replaces the file in the tree with a small pointer and 
 LFS server, fetched on checkout. It fixes repository size — and nothing else.
 
 **DVC over Git LFS:** three things LFS has no concept of. (1) The remote is **any object store you
-own** — S3, GCS, MinIO — not a quota on your Git host. (2) **Pipelines**: `dvc.yaml` declares
+own** — Cloud Storage, MinIO, any S3-protocol endpoint — not a quota on your Git host. (2) **Pipelines**: `dvc.yaml` declares
 stage dependencies and outputs, so `dvc repro` rebuilds only what changed and the data has a
 *lineage graph*, not just a version. (3) **Content-addressed deduplication across versions**, so
 re-ingesting an unchanged month costs nothing.
@@ -272,31 +272,33 @@ the first symptom would have been M5 firing weeks later on a model trained on ga
 
 ### 16. Name the components of your deployment diagram and their managed services. Pick one and say what you lose and gain. `*`
 
-| Component | AWS |
+| Component | Managed equivalent on GCP |
 | --- | --- |
-| MinIO-compatible object store (`pgsty/silo`) | Amazon S3 |
-| DVC 3.67.1 + dvc-s3 | S3 remote |
-| PostgreSQL 16 | Amazon RDS for PostgreSQL |
-| Apache Airflow 3.3.1, LocalExecutor | Amazon MWAA |
-| MLflow 3.16.1 | SageMaker with MLflow |
-| Feast 0.66.0 | SageMaker Feature Store |
-| `newsflow` model service (FastAPI) | EKS behind an internal ALB |
-| vLLM 0.30.0 | Amazon Bedrock |
-| Evidently | SageMaker Model Monitor |
-| Prometheus + Grafana | Amazon CloudWatch |
-| Minikube registry / Docker Hub | Amazon ECR |
+| MinIO-compatible object store (`pgsty/silo`) | Cloud Storage |
+| DVC 3.67.1 | GCS remote via `dvc-gs` |
+| PostgreSQL 16 | Cloud SQL for PostgreSQL |
+| Apache Airflow 3.3.1, LocalExecutor | Cloud Composer 3 |
+| MLflow 3.16.1 | Vertex AI Experiments + Model Registry |
+| Feast 0.66.0 | Vertex AI Feature Store |
+| `newsflow` model service (FastAPI) | GKE behind an internal load balancer |
+| vLLM 0.30.0 | Vertex AI generative AI |
+| Evidently | Vertex AI Model Monitoring |
+| Prometheus + Grafana | Cloud Monitoring |
+| Minikube registry / Docker Hub | Artifact Registry |
 
-**Taking Airflow → MWAA.**
+**Taking Airflow → Cloud Composer 3.**
 
 *Gain:* no scheduler, webserver or metadata database to operate or patch; managed upgrades; worker
-autoscaling; IAM-native access to S3 and RDS; someone else is paged when the scheduler wedges.
+autoscaling; native IAM access to Cloud Storage and Cloud SQL; someone else is paged when the
+scheduler wedges.
 
-*Lose:* **$360/month — 43% of the entire estimate (6.7) — to run roughly sixty short jobs**, because
-you rent a 24/7 environment regardless of use. The identical orchestrator no longer runs on a
-laptop, which is what makes Lab 2 reproducible from a clean clone. Provider and plugin versions move
-to Amazon's schedule, not `uv.lock`'s. And the DAG edit loop becomes an S3 sync instead of a restart.
+*Lose:* **~$400/month — about 42% of the entire estimate (6.7) — to run roughly sixty short jobs**,
+because you rent a 24/7 environment regardless of use. The identical orchestrator no longer runs on
+a laptop, which is what makes Lab 2 reproducible from a clean clone. Provider and plugin versions
+move to Google's release schedule, not `uv.lock`'s. And the DAG edit loop becomes a bucket sync
+instead of a local restart.
 
-For this workload the trade is bad, which is why 6.7 recommends Airflow as pods on the EKS cluster
+For this workload the trade is bad, which is why 6.7 recommends Airflow as pods on the GKE cluster
 that already exists — and why [`infra-variants.md`](infra-variants.md) shows Databricks Workflows
 doing the same sixty runs for ~$7.
 
@@ -305,10 +307,11 @@ doing the same sixty runs for ~$7.
 **The volume assumption — 2,000 articles/day — not the rates.** Rates are listed numbers; volume is
 a guess about a product that does not exist yet, and it multiplies the only lines that scale.
 
-At 20,000/day the bill does **not** become $8,400, and knowing why is the point: roughly **$600 of
-the $840 is fixed infrastructure** — MWAA, EKS, RDS, the MLflow server — that does not care about
-volume. Bedrock goes ~$70 → ~$700, the node group doubles, RDS moves a size, CloudWatch log volume
-scales linearly. Realistic total ≈ **$2,000–2,500**.
+At 20,000/day the bill does **not** become $9,600, and knowing why is the point: roughly **$750 of
+the $961 is fixed infrastructure** — Cloud Composer, GKE, Cloud SQL, the Vertex AI Feature Store
+node — that does not care about volume. Vertex AI generative AI goes ~$50 → ~$500, the node group
+doubles, Cloud SQL moves a size, Cloud Monitoring log volume scales linearly. Realistic total
+≈ **$2,100–2,600**.
 
 **First requirement relaxed: the Lab 3 LLM assist on *every* abstained article** (4.2, cost row).
 Restrict it to the lowest-confidence decile — roughly a 75% cut of the largest variable line for a

@@ -43,26 +43,26 @@ rates; the absolute totals are not.
 Rows are the components named in `design.md` 6.1. Two rows are the whole story — look at where
 Databricks says *n/a*.
 
-| Component (6.1) | **AWS** (chosen) | **GCP** | **Databricks** |
+| Component (6.1) | **GCP** (chosen) | AWS | Databricks |
 | --- | --- | --- | --- |
-| Object storage / data lake | Amazon S3 | Cloud Storage | Unity Catalog volumes — still S3/GCS underneath, billed by the cloud |
+| Object storage / data lake | Cloud Storage | Amazon S3 | Unity Catalog volumes — still S3/GCS underneath, billed by the cloud |
 | Data versioning | DVC remote on S3 | DVC remote on GCS | **Delta Lake table history + time travel** — replaces DVC rather than hosting it |
-| Warehouse / serving DB | RDS for PostgreSQL | Cloud SQL for PostgreSQL | Delta tables + SQL warehouse. **No PostgreSQL**: the online feature path needs Databricks Online Tables or an external store |
-| Orchestrator | Amazon MWAA | Cloud Composer 3 | **Databricks Workflows (Jobs)** |
-| Experiment tracking + registry | SageMaker with MLflow | Vertex AI Experiments + Model Registry | **MLflow in Unity Catalog** — native; Databricks authors MLflow |
-| Feature store | SageMaker Feature Store | Vertex AI Feature Store | Feature Engineering in UC + Online Tables |
-| Container registry | Amazon ECR | Artifact Registry | **n/a** — no image to push; the runtime is managed |
-| Kubernetes cluster | Amazon EKS | GKE Standard | **n/a** — no cluster; Model Serving is managed |
-| Model and data monitoring | SageMaker Model Monitor | Vertex AI Model Monitoring | Lakehouse Monitoring |
-| Metrics and dashboards | CloudWatch | Cloud Monitoring | System tables + DBSQL dashboards |
-| Vector store (Lab 3) | OpenSearch Serverless | Vertex AI Vector Search | Mosaic AI Vector Search |
-| LLM inference (Lab 3) | Amazon Bedrock | Vertex AI generative AI | Foundation Model APIs |
+| Warehouse / serving DB | Cloud SQL for PostgreSQL | RDS for PostgreSQL | Delta tables + SQL warehouse. **No PostgreSQL**: the online feature path needs Databricks Online Tables or an external store |
+| Orchestrator | Cloud Composer 3 | Amazon MWAA | **Databricks Workflows (Jobs)** |
+| Experiment tracking + registry | Vertex AI Experiments + Model Registry | SageMaker with MLflow | **MLflow in Unity Catalog** — native; Databricks authors MLflow |
+| Feature store | Vertex AI Feature Store | SageMaker Feature Store | Feature Engineering in UC + Online Tables |
+| Container registry | Artifact Registry | Amazon ECR | **n/a** — no image to push; the runtime is managed |
+| Kubernetes cluster | GKE Standard | Amazon EKS | **n/a** — no cluster; Model Serving is managed |
+| Model and data monitoring | Vertex AI Model Monitoring | SageMaker Model Monitor | Lakehouse Monitoring |
+| Metrics and dashboards | Cloud Monitoring | CloudWatch | System tables + DBSQL dashboards |
+| Vector store (Lab 3) | Vertex AI Vector Search | OpenSearch Serverless | Mosaic AI Vector Search |
+| LLM inference (Lab 3) | Vertex AI generative AI | Amazon Bedrock | Foundation Model APIs |
 
 ---
 
-## 2 Cost — AWS (the chosen column)
+## 2 Cost — AWS variant
 
-Unchanged from `design.md` 6.7, repeated here so the three totals sit side by side.
+The alternative that was priced first. Repeated here so the three totals sit side by side.
 `us-east-1`, on-demand list, no Savings Plans, no free tier.
 
 | Line | Size assumed | $/mo |
@@ -83,13 +83,13 @@ Unchanged from `design.md` 6.7, repeated here so the three totals sit side by si
 
 ---
 
-## 3 Cost — GCP variant
+## 3 Cost — GCP (the chosen column)
 
 `us-central1`, on-demand list.
 
 | Line | Size assumed | $/mo | Rate used |
 | --- | --- | --- | --- |
-| Cloud Storage | 50 GB Standard + ops | 3 | ~$0.020/GB-mo |
+| Cloud Storage | 3 | 50 GB Standard + ops | ~$0.020/GB-mo |
 | Cloud SQL for PostgreSQL | Enterprise, 2 vCPU / 4 GB, 100 GB SSD | 98 | $0.0413/vCPU-hr, $0.007/GB-hr, $0.170/GB-mo SSD |
 | **Cloud Composer 3** | small environment, 24/7 | **400** | $0.06/DCU-hr × ~9 DCU/hr |
 | Vertex AI Experiments + Model Registry | registry itself is free; metadata storage only | 5 | registry $0 |

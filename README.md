@@ -119,7 +119,9 @@ ingest_month:  extract → validate → transform → load → build_features �
 
 One run owns one calendar month. **The batch is the run's data interval**, read from
 `data_interval_start` / `data_interval_end` and matched against each article's own `date` field.
-Nothing in the DAG calls `datetime.now()`.
+No task derives its window from the clock — the one `datetime.now()` in the DAG stamps the run
+ledger with *when this attempt ran*, which is a record about the execution and never an input to
+what it selects.
 
 **On the schedule.** Airflow 3 changed the default so that a plain cron schedule produces runs whose
 `data_interval_start` and `data_interval_end` are the same instant — which would leave the tasks with
@@ -210,7 +212,8 @@ The batch was rejected and rolled back out of the warehouse:
 | `truncate_batch` | delivers ten rows instead of the month | Q8 |
 
 Screenshots: [a failed `quality_check`](docs/screenshots/airflow-quality-gate-failed.png) ·
-[a successful run graph](docs/screenshots/airflow-ingest-month-success.png) ·
+[a successful run graph](docs/screenshots/airflow-ingest-month-graph.png) ·
+[the same run's task list](docs/screenshots/airflow-ingest-month-success.png) ·
 [the backfill grid](docs/screenshots/airflow-backfill-grid.png).
 
 ### What the gate caught that we did not plant
@@ -285,14 +288,14 @@ Evaluated on a time-based split (design §5.4), all four on the same hold-out pe
 | Mean top-1 confidence | 0.7263 | — |
 | Auto-accept share at τ = 0.6 | 68.8% | target ≥ 60% (design 3.1) |
 
-`newsflow-category-router` version **1**, alias **`@champion`**:
+`newsflow-category-router` version **2**, alias **`@champion`**:
 
 | | |
 | --- | --- |
 | `data_version` | `bcd4791916daeac3fa5dc76786dd8bd5` |
-| `git_commit` | `661771bd6d1010769946e496ee88e048b69b3fc2-dirty` |
+| `git_commit` | `4c168e2bc9adb79a0f72af69dff0b7b2f05fe190` |
 | `feature_version` | `fv1.54623f56` |
-| source run | `35baabe9885d4e68a4a647de8ee60e34` |
+| source run | `d3b86b0722a4478ea77a08e84f9a2328` |
 | recorded hold-out macro-F1 | 0.4605 |
 <!-- RESULTS:END -->
 
@@ -344,11 +347,11 @@ larger is a real difference and the command exits non-zero.
 
 <!-- REPRODUCE:START -->
 ```
-reproducing newsflow-category-router v1
-  source run     35baabe9885d4e68a4a647de8ee60e34
+reproducing newsflow-category-router v2
+  source run     <run id>
   recorded       macro-F1 0.4605
   data_version   bcd4791916daeac3fa5dc76786dd8bd5  (already on disk)
-  git_commit     661771bd6d10  (matches)
+  git_commit     4c168e2bc9ad  (matches)
   feature_version fv1.54623f56  (matches)
 
 retraining on the same split ...
@@ -361,10 +364,15 @@ retraining on the same split ...
 within tolerance — reproduced.
 ```
 
-1 minute 52 seconds, and it logs itself as a run tagged `reproduction_of` so the reproduction is in
-the tracking server beside the thing it reproduced. It deliberately does **not** re-run the 12
+1 minute 50 seconds, and it logs itself as a run tagged `reproduction_of` so the reproduction sits
+in the tracking server beside the thing it reproduced. It deliberately does **not** re-run the 12
 rolling-origin folds: a reproduction repeats the fit that produced the artifact, not the search that
 selected it.
+
+Two versions are registered, and the pair is itself the evidence. `v1` was trained before this work
+was committed, so its `git_commit` carries a `-dirty` suffix and names code that cannot be checked
+out; `v2` was trained from the commit above and reproduces to the fourth decimal. The difference
+between them is exactly what the tag is for.
 <!-- REPRODUCE:END -->
 
 ---

@@ -347,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
     print("\n" + "=" * 66)
     print(f"  {'majority (tier 0)':<26} {majority:.4f}")
     print(f"  {'rule lexicon (tier 0)':<26} {rule:.4f}")
-    print(f"  {'TF-IDF -> LinearSVC (tier 1)':<26} {tier1['macro_f1']:.4f}   <- registered")
+    print(f"  {'TF-IDF -> linear SVM (tier 1)':<26} {tier1['macro_f1']:.4f}   <- registered")
     print(f"  {'  without author prior':<26} {no_prior:.4f}   (R6 delta {delta:+.4f})")
     print(f"  {'validation mean / std':<26} {tier1['val_mean']:.4f} / {tier1['val_std']:.4f}")
     print("=" * 66)

@@ -4,9 +4,11 @@
 
 **The batch is the data interval, never the clock.** Every task below receives
 `data_interval_start` / `data_interval_end` from the run and filters the archive on
-the article's own `date` field. Nothing in this file calls `datetime.now()`, which is
+the article's own `date` field. No task derives its window from the clock, which is
 what makes a backfill of 2015-03 produce the rows of March 2015 rather than the rows
-of whatever month it is when the backfill is launched.
+of whatever month it is when the backfill is launched. The single `datetime.now()`
+below stamps the run ledger with which attempt wrote the row — a record about the
+execution, never an input to what it selects.
 
 **Why `CronDataIntervalTimetable` and not `schedule="@monthly"`.** Airflow 3 changed
 the default: a plain cron schedule produces runs where `data_interval_start` and
@@ -136,6 +138,9 @@ def ingest_month() -> None:
         ledger = {
             "batch_month": month,
             "dag_run_id": context["dag_run"].run_id,
+            # The only clock read in this DAG, and it is a record of the execution,
+            # never an input to it: which attempt wrote this ledger row. Nothing
+            # downstream branches on it.
             "task_attempt": datetime.now(UTC),
             "data_interval_start": start,
             "data_interval_end": end,

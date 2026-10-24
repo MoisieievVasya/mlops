@@ -1084,14 +1084,14 @@ warehouse-scoped — a real defect the clean layer's primary key caught.
 | Mean top-1 confidence | 0.7263 | — |
 | Auto-accept share at τ = 0.6 | 68.8% | target ≥ 60% (design 3.1) |
 
-`newsflow-category-router` version **1**, alias **`@champion`**:
+`newsflow-category-router` version **2**, alias **`@champion`**:
 
 | | |
 | --- | --- |
 | `data_version` | `bcd4791916daeac3fa5dc76786dd8bd5` |
-| `git_commit` | `661771bd6d1010769946e496ee88e048b69b3fc2-dirty` |
+| `git_commit` | `4c168e2bc9adb79a0f72af69dff0b7b2f05fe190` |
 | `feature_version` | `fv1.54623f56` |
-| source run | `35baabe9885d4e68a4a647de8ee60e34` |
+| source run | `d3b86b0722a4478ea77a08e84f9a2328` |
 | recorded hold-out macro-F1 | 0.4605 |
 <!-- RESULTS:END -->
 

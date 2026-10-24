@@ -1,0 +1,88 @@
+# The feature contract — design 5.3, "Features, with the serving-time source of
+# every value".
+#
+# This file is not documentation. Two things read it:
+#   * newsflow.features computes feature_version as  fv1.<sha256 of this file>[:8],
+#     stamped on every row of features.article_features and on every MLflow run, so
+#     "which feature definition produced this row" is answerable from the row alone;
+#   * tests assert that every feature listed here has a serving_source, because a
+#     feature without one is exactly the feature that will differ between training
+#     and serving.
+#
+# Edit this file -> feature_version changes -> rows built before and after are
+# distinguishable. That is the point.
+schema_version: 1
+taxonomy: conf/taxonomy.yaml
+
+features:
+  - name: headline_norm
+    type: text
+    training_source: "raw.articles.headline, through newsflow.text.normalise"
+    serving_source: "CMS draft `title`, through newsflow.text.normalise"
+    note: "one shared transform module, imported by both paths - the structural defence against skew"
+
+  - name: dek_norm
+    type: text
+    training_source: "raw.articles.short_description or the literal <no_dek>"
+    serving_source: "CMS draft `dek` or the literal <no_dek>"
+    note: "missingness is a real state (9.4% of the archive), encoded, never imputed"
+
+  - name: text_len_words
+    type: int
+    training_source: "derived from headline_norm + dek_norm"
+    serving_source: "derived identically from the request body"
+
+  - name: has_dek
+    type: bool
+    training_source: "derived from short_description"
+    serving_source: "derived from the request body"
+
+  - name: publish_dow
+    type: categorical
+    training_source: "raw.articles.date"
+    serving_source: "scheduled publish timestamp on the request"
+
+  - name: publish_month
+    type: categorical
+    training_source: "raw.articles.date"
+    serving_source: "scheduled publish timestamp on the request"
+
+  - name: author_hash
+    type: categorical
+    training_source: "salted sha256 of raw.articles.authors (design 6.5)"
+    serving_source: "salted sha256 of the CMS byline, same salt"
+    note: "a key, not a model input - no plaintext byline leaves the raw layer"
+
+  - name: author_desk_prior
+    type: float_vector_17
+    training_source: "point-in-time aggregate over dwh.articles rows of the same author with event_ts STRICTLY BEFORE this row's event_ts"
+    serving_source: "Feast online store (PostgreSQL), keyed by author_hash, refreshed nightly"
+    note: >
+      The leaky one. Computed over the whole training set it encodes the label.
+      Its serving source is deliberately not its training source - a nightly
+      snapshot versus a historical as-of join - and that asymmetry is declared
+      rather than discovered. Acceptance check R6: removing it must move offline
+      macro-F1 by less than 0.05.
+
+  - name: author_seen_count
+    type: int
+    training_source: "count of the same author's strictly-earlier rows"
+    serving_source: "Feast online store, same row as author_desk_prior"
+    note: "below 5 the prior is replaced by the global prior"
+
+  - name: source_feed_id
+    type: categorical
+    training_source: "constant 'huffpost' in the archive - one publisher"
+    serving_source: "CMS feed id"
+    note: "constant through Lab 4 (design R2); real only when a second publisher is added"
+
+# Fields present in the source and deliberately absent above.
+dropped:
+  - name: link
+    reason: >
+      Leakage. The URL is minted by the CMS after the section has been chosen, so it
+      carries the answer at training time and does not exist at serving time. Dropped
+      in the transform task, before the clean layer - dwh.articles has no link column
+      at all, which is the enforcement (design 5.2).
+  - name: article_body
+    reason: "not final at publish-hook time; out of scope (design 5.2)"

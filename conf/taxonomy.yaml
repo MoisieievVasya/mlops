@@ -1,0 +1,91 @@
+# The serving taxonomy — design 5.2, "42 raw labels → 17 serving categories".
+#
+# This file is the contract between the archive and the model. The raw taxonomy is
+# not stable (WORLDPOST → THE WORLDPOST → WORLD NEWS is one desk renamed across the
+# decade), so training on raw labels would teach the model which year it is. The
+# quality gate fails the batch when a raw label is observed that is absent from this
+# map: a silent upstream taxonomy change becomes a loud failure (design R1, 6.8).
+#
+# Changing this file is a reviewed event. It changes the model's output contract and
+# it changes feature_version, because conf/features.yaml references it.
+version: "2026-10-26"
+
+serving_categories:
+  - POLITICS
+  - WORLD NEWS
+  - BUSINESS & MONEY
+  - SCIENCE & TECH
+  - ENVIRONMENT
+  - HEALTH & WELLNESS
+  - FOOD & DRINK
+  - TRAVEL
+  - STYLE & BEAUTY
+  - HOME & LIVING
+  - FAMILY & RELATIONSHIPS
+  - ENTERTAINMENT
+  - ARTS & CULTURE
+  - SPORTS
+  - CRIME & JUSTICE
+  - EDUCATION
+  - SOCIETY & IDENTITY
+
+# raw label -> serving category. All 42 labels observed in the archive are here.
+map:
+  POLITICS: POLITICS
+  U.S. NEWS: POLITICS
+
+  WORLD NEWS: WORLD NEWS
+  THE WORLDPOST: WORLD NEWS
+  WORLDPOST: WORLD NEWS
+
+  BUSINESS: BUSINESS & MONEY
+  MONEY: BUSINESS & MONEY
+
+  SCIENCE: SCIENCE & TECH
+  TECH: SCIENCE & TECH
+
+  GREEN: ENVIRONMENT
+  ENVIRONMENT: ENVIRONMENT
+
+  WELLNESS: HEALTH & WELLNESS
+  HEALTHY LIVING: HEALTH & WELLNESS
+
+  FOOD & DRINK: FOOD & DRINK
+  TASTE: FOOD & DRINK
+
+  TRAVEL: TRAVEL
+
+  STYLE & BEAUTY: STYLE & BEAUTY
+  STYLE: STYLE & BEAUTY
+
+  HOME & LIVING: HOME & LIVING
+
+  PARENTING: FAMILY & RELATIONSHIPS
+  PARENTS: FAMILY & RELATIONSHIPS
+  WEDDINGS: FAMILY & RELATIONSHIPS
+  DIVORCE: FAMILY & RELATIONSHIPS
+
+  ENTERTAINMENT: ENTERTAINMENT
+  COMEDY: ENTERTAINMENT
+  MEDIA: ENTERTAINMENT
+  WEIRD NEWS: ENTERTAINMENT
+
+  ARTS: ARTS & CULTURE
+  ARTS & CULTURE: ARTS & CULTURE
+  CULTURE & ARTS: ARTS & CULTURE
+
+  SPORTS: SPORTS
+
+  CRIME: CRIME & JUSTICE
+
+  EDUCATION: EDUCATION
+  COLLEGE: EDUCATION
+
+  QUEER VOICES: SOCIETY & IDENTITY
+  BLACK VOICES: SOCIETY & IDENTITY
+  LATINO VOICES: SOCIETY & IDENTITY
+  WOMEN: SOCIETY & IDENTITY
+  RELIGION: SOCIETY & IDENTITY
+  IMPACT: SOCIETY & IDENTITY
+  GOOD NEWS: SOCIETY & IDENTITY
+  FIFTY: SOCIETY & IDENTITY

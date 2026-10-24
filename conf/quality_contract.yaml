@@ -1,0 +1,124 @@
+# MARK 2 of the data-flow diagram — the quality gate (design 6.1, 6.8).
+#
+# Every check below is evaluated by the `quality_check` task against the month the
+# run owns. A failure fails the task, the batch's partition is rolled back out of the
+# warehouse, and nothing downstream runs. There is no coercion and no partial ingest.
+#
+# Each check names the upstream break it exists to catch, because a threshold whose
+# failure mode nobody can state is a threshold nobody will act on.
+version: 1
+
+checks:
+  - id: Q1
+    name: rows_present
+    scope: raw
+    rule: "rows_extracted > 0"
+    catches: "an empty or missing partition - the source stopped delivering"
+    severity: fail
+
+  - id: Q2
+    name: schema_contract
+    scope: raw
+    rule: "every row has headline, date and category as strings; date parses as a date"
+    catches: "a renamed or retyped field upstream (design 6.8, 'on a breaking change')"
+    severity: fail
+
+  - id: Q3
+    name: interval_containment
+    scope: raw
+    rule: "every extracted row's date falls inside [data_interval_start, data_interval_end)"
+    catches: "a batch keyed on the wall clock instead of the interval - the bug this lab exists to prevent"
+    severity: fail
+
+  - id: Q4
+    name: every_raw_label_mapped
+    scope: clean
+    rule: "count(label_category = 'UNMAPPED') == 0"
+    catches: "a silent taxonomy change upstream (design R1). The headline check of this gate."
+    severity: fail
+
+  - id: Q5
+    name: no_duplicate_ids
+    scope: clean
+    rule: "count(distinct article_id) == count(*) in the month's partition"
+    catches: "a re-delivered batch merged into a fresh one; a broken id"
+    severity: fail
+
+  - id: Q6
+    name: missing_dek_share
+    scope: clean
+    rule: "share of rows with has_dek = false <= 0.25"
+    catches: "the CMS dropping the dek field - monitored as M11 in production (design 6.6)"
+    severity: fail
+    threshold: 0.25
+
+  - id: Q7
+    name: dropped_row_share
+    scope: clean
+    rule: "(rows_extracted - rows_loaded) / rows_extracted <= 0.02"
+    catches: "a batch that cleaning quietly ate; 2% is ~20x the archive's observed 0.02%"
+    severity: fail
+    threshold: 0.02
+
+  - id: Q8
+    name: row_count_within_bounds
+    scope: clean
+    rule: "rows_loaded between 50 and 6000 for a calendar month"
+    catches: >
+      a half-delivered or doubled month. Design 6.1 calls for a 3-sigma band; with
+      129 archive months of between 127 and 2953 rows a fixed band is the honest
+      implementation, and the band is widened only with a recorded reason.
+    severity: fail
+    min_rows: 50
+    max_rows: 6000
+
+  - id: Q9
+    name: feature_parity
+    scope: features
+    rule: "count(features.article_features) == count(dwh.articles) for the month"
+    catches: "a feature build that silently skipped rows - the stale-feature-table failure"
+    severity: fail
+
+  - id: Q10
+    name: feature_version_present
+    scope: features
+    rule: "every feature row carries a non-null feature_version equal to the current one"
+    catches: "rows built by a feature definition nobody can name afterwards"
+    severity: fail
+
+# ------------------------------------------------------------------- waivers ---
+# A check that fires on a real, understood, bounded property of the source is not a
+# reason to loosen the check for all time. It is a reason to record a decision.
+#
+# A waiver names one check, one period and one reason. Inside it the batch loads and
+# the ledger records `passed_with_waiver` plus the waiver id — never a silent pass.
+# Outside it the check is unchanged. Removing a waiver re-fails the months it covered,
+# which is the property that makes this different from raising the threshold.
+waivers:
+  - id: W1
+    check: Q6
+    from: "2014-05"
+    to: "2015-06"
+    reason: >
+      The gate fired on these 14 months during the first full backfill. Investigated:
+      the missing-dek share is 0.40-0.56 for every month in this contiguous window and
+      below 0.05 in all 115 months outside it, so this is a real episode in the
+      publisher's archive - the dek was genuinely not recorded for about half the
+      articles for thirteen months - and not a delivery failure we can re-request.
+      Design 5.2 already states that an absent dek is a real state encoded as
+      <no_dek> and never imputed, so these rows are usable. Dropping 36,000 real
+      articles, including a US midterm cycle, would bias the training set far more
+      than the missing field does.
+    what_would_change_the_decision: >
+      This waiver is for the archive. In production the same share would mean the CMS
+      had stopped sending the field, which is a break to escalate, not to waive -
+      which is why the bound stays at 0.25 everywhere else and M11 keeps alerting.
+    approved_by: "ML engineer on duty (project owner), 2026-10-26"
+
+# Faults the DAG can inject on purpose, so that the gate is shown to fail rather than
+# asserted to work. Triggered with:  airflow dags trigger ... --conf '{"fault": "<id>"}'
+faults:
+  unmapped_label: "rewrites one row's category to CRYPTO, a label absent from taxonomy.yaml -> Q4"
+  null_headline: "blanks the headline and the dek of 5% of the batch -> Q7"
+  duplicate_rows: "appends a copy of the first 10 rows of the batch -> Q5"
+  truncate_batch: "keeps only the first 10 rows of the batch -> Q8"

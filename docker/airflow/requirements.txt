@@ -1,0 +1,12 @@
+# Extra packages baked into the Airflow image on top of apache/airflow:3.3.1.
+# Kept deliberately short: the DAGs import `newsflow`, which depends on these and
+# nothing else. Versions match the host environment in uv.lock so that a task
+# behaves the same whether it runs in Airflow or from `make train`.
+pandas==2.3.3
+scikit-learn==1.7.2
+scipy==1.16.2
+numpy==2.2.6
+psycopg2-binary==2.9.10
+PyYAML==6.0.3
+pyarrow==21.0.0
+mlflow-skinny==3.16.1

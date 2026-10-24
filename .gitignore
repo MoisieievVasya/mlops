@@ -10,12 +10,21 @@ __pycache__/
 .env
 .env.local
 
-# Data (tracked by DVC from Lab 2 onwards, never by Git)
-data/
-!data/.gitkeep
+# Data: the bytes belong to DVC and the remote, the pointers belong to Git.
+# `data/raw/news_category_v3.json` is ignored; `...json.dvc`, which names its hash,
+# is committed and is what a reviewer clones (design 6.1, mark 1).
+data/**
+!data/**/
+!data/**/*.dvc
+!data/**/.gitignore
 *.parquet
 *.csv
 *.json.gz
+
+# DVC local state: the remote's credentials live here and are never committed.
+/.dvc/config.local
+/.dvc/tmp
+/.dvc/cache
 
 # Local service state
 mlruns/

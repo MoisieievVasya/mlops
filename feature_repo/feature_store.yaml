@@ -1,0 +1,34 @@
+# Feast 0.66.0 — the feature store of design 6.1, layer 3.
+#
+# The point of this file is the split it declares: an offline store that answers
+# "what did we know about this author *at the moment* this article was published"
+# and an online store that answers "what do we know about this author right now".
+# Training reads the first, serving reads the second, and MARK 3 of the data-flow
+# diagram is exactly this line — training-serving skew, if it enters, enters here.
+#
+#   offline  Parquet on disk, exported from features.article_features
+#   online   PostgreSQL 16, the same instance as the warehouse
+#   registry PostgreSQL 16, so the definitions are not a file on one laptop
+project: newsflow
+provider: local
+
+offline_store:
+  type: file
+
+online_store:
+  type: postgres
+  host: ${NEWSFLOW_PG_HOST}
+  port: ${NEWSFLOW_PG_PORT}
+  database: feast
+  db_schema: public
+  user: ${POSTGRES_USER}
+  password: ${POSTGRES_PASSWORD}
+  # The local stack's PostgreSQL has no TLS; Feast's driver requires it by default.
+  sslmode: disable
+
+registry:
+  registry_type: sql
+  path: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${NEWSFLOW_PG_HOST}:${NEWSFLOW_PG_PORT}/feast
+  cache_ttl_seconds: 60
+
+entity_key_serialization_version: 3

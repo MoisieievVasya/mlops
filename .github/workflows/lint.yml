@@ -12,3 +12,9 @@ jobs:
           enable-cache: true
       - run: make setup
       - run: make lint
+      # The contract tests check the three config files that are contracts rather
+      # than settings — the taxonomy, the feature spec and the gate — against the
+      # code that reads them. They need no database and no stack, which is why they
+      # can run here: a disagreement between conf/ and src/ is caught on push rather
+      # than by a failing DAG run an hour into a backfill.
+      - run: make test

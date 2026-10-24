@@ -5,12 +5,31 @@ description = "newsflow - topic routing for an online news aggregator (KSE MLOps
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-dependencies = []
+# Pinned to the course reference stack of design 6.2. The same versions are baked
+# into the Airflow image (docker/airflow/requirements.txt), so a task behaves the
+# same whether the orchestrator runs it or `make train` does.
+dependencies = [
+    "dvc[s3]==3.67.1",
+    "mlflow==3.16.1",
+    "numpy==2.2.6",
+    "pandas==2.3.3",
+    "psycopg2-binary==2.9.10",
+    "pyarrow==21.0.0",
+    "pyyaml==6.0.3",
+    "scikit-learn==1.7.2",
+    "scipy==1.16.2",
+]
+
+[project.optional-dependencies]
+# Feast is the optional half of step 4 and drags in its own dependency tree, so it
+# is not in the default environment: `uv sync --extra feast` before `make feast-demo`.
+feast = ["feast[postgres]==0.66.0"]
 
 [dependency-groups]
 dev = [
     "ruff>=0.14.0",
     "pre-commit>=4.0.0",
+    "pytest>=8.3.0",
 ]
 
 [build-system]

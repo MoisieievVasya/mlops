@@ -386,3 +386,310 @@ operability — no retraining loop, no drift, no feature store, trivially explai
 and most of this design would be unnecessary. That is a real possible outcome and the experiment is
 set up so it can happen. It is also why the rule baseline is kept in 5.3 as the documented fallback
 for a long model-service outage, where an explainable 0.30 beats a 503.
+
+---
+
+# Defense notes — Lab 2 (Appendix 2)
+
+Answers to the Lab 2 questions. The starred ones need the repository open; those cite files and
+commands rather than restating theory. Numbers are the measured ones, not the Lab 1 assumptions.
+
+### 1. The model lifecycle from data collection to retirement. Which artifact corresponds to each stage, and which stage has none yet? `*`
+
+| Stage | Artifact in this repository |
+| --- | --- |
+| Data collection | `scripts/fetch_raw.sh`, `data/raw/news_category_v3.json.dvc` |
+| Versioning | the DVC remote `s3://newsflow-dvc`, md5 `bcd4791916daeac3fa5dc76786dd8bd5` |
+| Ingestion / cleaning | `dags/ingest_month.py`, `src/newsflow/etl/` |
+| Validation | `conf/quality_contract.yaml` + `src/newsflow/etl/quality.py` |
+| Feature engineering | `features.article_features`, `conf/features.yaml`, `feature_repo/` |
+| Training | `src/newsflow/train.py`, `dags/train_and_register.py` |
+| Experiment tracking | the MLflow experiment `newsflow-category-router` |
+| Registration | the registered model, alias `@champion`, tagged with both identifiers |
+| Reproduction | `make reproduce VERSION=champion` |
+| **Deployment** | **none yet** — Lab 4 |
+| **Monitoring** | **none yet** — design 6.6 only |
+| **Retirement** | **none yet** — no second version has existed, so no rollback has been exercised |
+
+Three stages have no artifact, and all three are serving-side. That is the honest shape of Lab 2:
+layers 1–5 of the data-flow diagram run, 6–7 are still prose.
+
+### 2. CSV versus Parquet versus a database table for raw, clean and features. What did each cost or save? `*`
+
+All three layers are **PostgreSQL tables**, and one export is Parquet.
+
+* **Raw** — a table, not the file. The file stays the versioned source of truth; `raw.articles` is
+  the batch as delivered, with `batch_month`, `data_version` and `ingested_at` on every row. *Saved:*
+  the gate can query a rejected batch after the rollback. *Cost:* the archive is stored twice.
+* **Clean** — a table. *Saved:* the primary key on `article_id` turned a silent duplicate into a
+  loud failure — it is how the cross-month re-deliveries were found at all. *Cost:* that same key
+  made five months fail until the dedup was widened from the batch to the warehouse.
+* **Features** — a table, exported to Parquet for Feast. *Saved:* `real[]` holds the 17-vector
+  natively, and the as-of join is one SQL statement. *Cost:* a 17-column unpack on every read.
+* **CSV** appears nowhere. It has no types, no null-versus-empty distinction — fatal here, where an
+  empty dek is a modelled state — and no way to address a partition.
+
+### 3. What does DVC keep in Git and what in the remote? If the remote vanished tonight, what could still be rebuilt? `*`
+
+Git holds `data/raw/news_category_v3.json.dvc` (the md5, the size, the path), `.dvc/config` (bucket
+and endpoint, no credentials) and `.dvcignore`. The remote holds the 83 MB of content, addressed by
+that md5. Credentials are in `.dvc/config.local` and `.env`, both gitignored.
+
+If the remote vanished: everything except the bytes. The warehouse is unaffected, every MLflow run
+keeps its `data_version` tag, and `make data` falls back to the public mirror and verifies the same
+checksum — so the archive is recoverable and *provably the same archive*. What would be lost is the
+guarantee for a version the mirror no longer serves; that is the argument for the remote, not for
+the mirror.
+
+### 4. Git LFS versus DVC. One file in this project that belongs in each.
+
+LFS replaces a large file with a pointer and stores the blob in a Git-adjacent store — still
+Git's lifecycle, still Git's host. DVC stores content in *any* object store, keyed by hash,
+decoupled from Git's history, and ties a data version to a pipeline stage.
+
+`docs/screenshots/*.png` belongs in LFS: small, versioned with the text that references it, needed
+on any clone. `data/raw/news_category_v3.json` belongs in DVC: 83 MB, not needed to read the repo,
+and it has to be addressable by hash from an MLflow tag.
+
+### 5. The DAG succeeded for three days and the feature table is stale because `extract` read the same file every time. Which task would have caught it, and what would the alert say? `*`
+
+`quality_check`, via **Q3 interval_containment** in `validate` — every row's `published_at` must lie
+inside `[data_interval_start, data_interval_end)`. Re-reading yesterday's partition puts every row
+outside today's interval and the run fails on the first batch, not the third day.
+
+The message is already written: `Q3 interval_containment: N of M rows fall outside [start, end); e.g.
+[dates]. The batch is not the interval.` In production the same failure is M3 (partition staleness),
+which additionally alerts when the partition hash equals yesterday's.
+
+### 6. Define idempotency for a pipeline task. Show the exact statement in `load` that makes a second run of the same interval harmless. `*`
+
+Idempotent: running the task *n* times over the same interval leaves the system in the same state as
+running it once. Not "it does not crash" — the state has to converge.
+
+`src/newsflow/warehouse.py::replace_partition`:
+
+```sql
+DELETE FROM dwh.articles WHERE batch_month = %s;
+INSERT INTO dwh.articles (...) VALUES %s;   -- same transaction
+```
+
+Delete-then-insert, not upsert. An upsert is idempotent only when the rerun produces a *superset* of
+the first run's rows; if a batch shrinks, the surplus stays and the month holds a mixture of two
+runs. The delete makes the partition *equal* to the batch. Proof, not claim: `make rerun
+MONTH=2022-03` → `174 | 174 | 174` twice, both executions kept in `dwh.batch_runs`.
+
+### 7. Why must the batch come from the data interval and not the current time? What happens to a backfill of last month if a task uses `datetime.now()`?
+
+Because `now()` makes the task's output a function of *when it ran*, and every property that matters
+— reproducibility, backfill, rerun-safety — requires it to be a function of *what it was asked for*.
+
+A backfill of last month with `datetime.now()` ingests **this** month into last month's partition.
+Every row lands under the wrong `batch_month`; the feature build computes each author's prior from
+the wrong window; and nothing fails, because the rows are perfectly valid — just the wrong rows. In
+this repository Q3 is what turns that into a failure. There is no `datetime.now()` in `dags/`.
+
+### 8. The gate fails every night at 02:00 because the file arrives at 02:30. Is the gate wrong? What do you change — the gate, the schedule, or the contract? `*`
+
+The gate is right; it is reporting that the data is not there. Changing the gate would delete the
+only signal that the system has about its own input.
+
+Change the **schedule** if 02:30 is the real, agreed arrival time — the gate encodes a contract the
+schedule is violating. Change the **contract** if 02:30 is merely what happens today and nobody has
+promised it: then the SLA is unstated and the fix is to state it, with the schedule following.
+
+Never change the threshold to make the red go away. This is not hypothetical here: the first full
+backfill rejected 14 months on Q6. The investigation found a real 13-month episode, and the answer
+was a **waiver** — one check, one named period, a reason, an approver, and what would reverse it —
+not a higher bound. `conf/quality_contract.yaml:waivers`, design 5.2.
+
+### 9. Give a cleaning rule and the number of rows it affects. How did you decide those rows were dirty and not a real pattern? `*`
+
+Two, both counted into `dwh.batch_runs`:
+
+1. **A row with neither headline nor dek is dropped — 5 rows in 209,527.** Dirty, not a pattern:
+   the model's entire input is headline + dek, so a row with neither cannot be classified by any
+   model, and 5 rows in a decade is not a phenomenon.
+2. **A repeated `article_id` is dropped, first delivery wins — 41 rows.** Dirty: every one of the 41
+   has a mangled `https://www.huffingtonpost.comhttp://www.politico.com/...` link, a concatenation
+   bug in the source's own export.
+
+The contrast that makes the decision: **19,712 rows have an empty dek and are kept.** That is 9.4%
+of the archive, it is concentrated in a 13-month episode, and the design already models absence as
+`<no_dek>`. Frequency and structure are what separate the two — 5 scattered rows versus 19,712 in a
+contiguous block.
+
+### 10. What is a star schema? What is the grain of your fact table, and which feature is an aggregate over it? `*`
+
+A fact table of measurements surrounded by dimension tables of context, joined by keys — chosen so
+the fact grain is stated once and every aggregate is defined relative to it.
+
+The grain here is **one row per article**: `dwh.articles`, keyed on `article_id`, with
+`event_ts` as the time axis, `author_hash` and `source_feed_id` as degenerate dimension keys and
+`label_category` as the outcome. `conf/taxonomy.yaml` is the category dimension — versioned in Git
+rather than a table, because it has 17 rows and changing it is a reviewed event.
+
+`author_desk_prior` is the aggregate: a 17-vector over all facts sharing an `author_hash` with
+`event_ts` strictly earlier. `author_seen_count` is its cardinality.
+
+### 11. What is point-in-time correctness, which join produces it, and which feature would leak without it? `*`
+
+Point-in-time correctness: a feature's training-time value is the value that **was knowable at the
+moment being predicted** — never computed from rows that arrived after it.
+
+The join is an as-of join, bounded by the row's own timestamp:
+
+```sql
+JOIN dwh.articles h ON h.author_hash = b.author_hash AND h.event_ts < b.event_ts
+```
+
+`author_desk_prior` leaks without it, and leaks badly: computed over the whole training set it is
+the author's section distribution *including this article*, so for a once-a-year contributor it is
+close to a one-hot of the answer. `make feast-demo` shows the property directly — an entity
+timestamp between two feature rows returns the earlier one (1,916, not 1,917).
+
+Two details that are also point-in-time decisions: the comparison is `<`, never `<=`, because the
+archive has day granularity; and an absent byline is excluded rather than pooled.
+
+### 12. Explain training-serving skew. For one feature, name its training-time and serving-time sources and say whether they can differ. `*`
+
+Skew: the value a feature has at training differs from the value it has at serving, so the model is
+scored on one distribution and deployed on another. It is a *systems* bug, not a modelling one — it
+comes from two code paths computing one definition.
+
+* `headline_norm`: training source `raw.articles.headline` through `newsflow.text.normalise`;
+  serving source the CMS draft `title` through **the same function**. They cannot differ, because
+  there is one implementation and both paths import it. That is a structural guarantee.
+* `author_desk_prior`: training source an as-of join over the warehouse; serving source a
+  **nightly-refreshed Feast online table**. They *can and will* differ — by up to a day of the
+  author's activity. Declared in `conf/features.yaml`, accepted, and bounded: the staleness is one
+  refresh cycle, and `author_seen_count` moving by one does not move a 17-way distribution much.
+
+The second is the honest case. A declared, bounded asymmetry is manageable; an undeclared one is an
+incident.
+
+### 13. A feature store has an offline and an online store. Which does Lab 2 use, which will Lab 4 need, and what keeps their definitions the same? `*`
+
+Lab 2 uses the **offline** store: `features.article_features` in PostgreSQL, exported to Parquet
+(`feature_repo/data/author_desk_state.parquet`, 144,473 rows over 28,867 bylines) and read through
+`get_historical_features`. Lab 4 needs the **online** store — PostgreSQL, already configured and
+applied — because the publish hook has to answer in 300 ms and cannot run an as-of join.
+
+What keeps them the same is `feature_repo/features.py`: one `FeatureView` with one schema and one
+source feeds both paths, so "the same feature" is a single definition rather than two
+implementations that happen to agree today. The registry lives in PostgreSQL, not in a file on one
+laptop, for the same reason.
+
+### 14. Why is a random split wrong for your data? Which period did you hold out, and what would the metric have looked like under a random split? `*`
+
+Two independent failures. **Leakage**: news arrives in bursts — one event produces dozens of
+near-duplicate headlines on the same day — so a random split puts near-duplicates of a test article
+in training and the score measures memorisation of a news cycle. **The wrong question**: the model
+is asked about *future* articles; a random split answers "can it classify articles from a
+distribution it has already seen".
+
+Held out: **2018-01 → 2022-09, 57 months, 17,257 articles**, touched once. Under a random split the
+macro-F1 would be *higher and meaningless* — inflated by near-duplicate bleed and by the hold-out
+period's distribution being represented in training, including the 2018-06 volume break that the
+time split deliberately leaves on the far side of the cut.
+
+The dates moved from the Lab 1 plan, and why is in design 5.4: the archive's volume collapses
+tenfold at 2018-06, so the Lab 1 cut would have held out 1,398 rows across 17 classes.
+
+### 15. Your rule baseline beats your model. Two reasons that would be expected, and one that would make it a bug. `*`
+
+Expected: **(a)** the categories are defined by closed, auditable vocabulary — if `SPORTS` is
+"articles containing NFL, NBA, playoff", a lexicon *is* the function and a model can only
+approximate it; **(b)** too little labelled data per class for a 17-way model to beat hand-written
+priors, which is a data problem, not a modelling one.
+
+A bug: the model is scored on a split the rule is not, or the model's features are not reaching it —
+an all-zero prior block, a vectoriser fitted on the wrong column. Both tiers here are scored by the
+same function on the same hold-out frame (`newsflow.metrics`), and both read `model_text`, so that
+particular bug is ruled out by construction rather than by inspection.
+
+The measured outcome is in 7.2 and in the README. The rule's own number is reported with its
+**coverage** — the share of rows that matched a term rather than falling back — because a rule that
+answers two rows in three and guesses the rest is a different artifact from one that answers most of
+them, and the aggregate hides which you have.
+
+### 16. Experiment tracking versus a model registry. What is in your registry that is not in any run? `*`
+
+Tracking is the *history*: every run, including the three that lost. The registry is the *catalogue*:
+the few artifacts something downstream may load, with names, versions and aliases.
+
+What the registry has and no run has: **the alias `@champion`**. A run id is immutable and anonymous;
+`@champion` is a mutable pointer that something else resolves by name. It is the only object in
+either system that encodes a *decision* rather than a *fact* — which is why design 5.5 puts moving it
+behind the editorial lead's sign-off and why `dags/train_and_register.py` reports eligibility and
+stops rather than promoting.
+
+### 17. The registry says version 7 is champion. Walk through finding which data built it, which code, and how to rerun it. `*`
+
+Three commands, and the first two are reads:
+
+```bash
+mlflow models get-model-version -n newsflow-category-router -v 7     # data_version, git_commit
+git log -S <data_version> -- data/raw/news_category_v3.json.dvc      # the commit that pinned it
+make reproduce VERSION=7
+```
+
+`make reproduce` does the whole chain itself: resolves the version, reads `data_version` off its
+tags, compares it with the archive on this disk, and if they differ restores the `.dvc` pointer from
+the commit that named that hash and pulls it from the remote; warns if the working tree is a
+different commit; retrains the same pipeline on the same split; and compares the hold-out macro-F1
+with the value recorded on the version, failing outside **±0.005**.
+
+It also refuses early, loudly, if the version carries no lineage tags — a registered model without
+`data_version` and `git_commit` is a file nobody can explain.
+
+### 18. Why do SOTA models lose to simpler ones in production? Name two costs of the SOTA model your non-functional requirements would reject. `*`
+
+Because production scores a system, not a model: the metric is one term, and latency, cost,
+reproducibility, explainability and failure behaviour are the rest. A model that wins the first and
+loses four is a worse system.
+
+Two that 4.2 rejects outright: **(1) latency** — p95 ≤ 300 ms inside the publish hook on a CPU-only
+budget; a cross-encoder or a fine-tuned transformer blows it, and 5.4 puts measured p95 *inside* the
+promotion gate so a better macro-F1 cannot buy its way past. **(2) reproducibility** — rebuild to
+±0.005 macro-F1 from a commit and a DVC hash; a GPU-trained non-deterministic fine-tune cannot
+promise that band without pinning the hardware, which the project does not control.
+
+The third, if pressed: retraining cost against the drift cadence of design 6.6.
+
+### 19. LLM-generated synthetic data is added to the training set. Which quality checks change, and what must the run record? `*`
+
+Q4 (every raw label mapped) is unaffected — generated rows carry a label from the 17 by
+construction. The ones that change:
+
+* **Q5 no_duplicate_ids** becomes near-useless: a generator produces near-duplicates, not exact
+  ones, so exact-id dedup passes while the training set fills with paraphrases. It needs a
+  near-duplicate check — a similarity threshold — not an equality one.
+* **Q7 dropped_row_share** and **Q8 row_count** need a provenance split: a month is no longer one
+  population, and the bounds for the real and generated parts are different.
+* **A new check is required**: the share of generated rows per batch and per class, bounded. Without
+  it the cheapest way to fix a small class is to synthesise it, and the metric improves while the
+  product does not.
+
+The run must record: the generator model and version, the prompt hash, the generation parameters,
+the real-to-synthetic ratio per class, and a `data_version` that **distinguishes the mixed dataset
+from the real one** — the same md5 must never name both. A new `feature_version` too, if the
+generated rows change what `author_desk_prior` means for a byline that never wrote them.
+
+### 20. Two students run your reproduction command and get metrics differing by 2%. Name three sources, and say which your tolerance covers. `*`
+
+Three, in increasing severity:
+
+1. **BLAS threading and library build** — the linear solver's reduction order varies with thread
+   count and OpenBLAS build. Moves macro-F1 in the fourth decimal.
+2. **A different `feature_version`** — if one of them edited `conf/features.yaml` or
+   `conf/taxonomy.yaml`, they trained on different rows. `make reproduce` prints both versions and
+   says so.
+3. **A different warehouse** — the big one. The metric is computed from `features.article_features`,
+   not from the archive, so a student who backfilled 90 months and one who backfilled 129 are
+   training on different data under the same `data_version`. Same archive hash, different warehouse.
+
+**The ±0.005 tolerance covers only (1).** Two percent is roughly 0.013 absolute at these values —
+four times the band, so the command exits non-zero, which is correct: that difference is a real
+difference and it is almost certainly (3). The honest conclusion is that `data_version` alone does
+not identify the training set, and the fix for Lab 4 is to put the warehouse's own state — the month
+range and row count the run read — on the run as a tag beside the DVC hash.

@@ -22,6 +22,19 @@ repos:
       - id: end-of-file-fixer
       - id: trailing-whitespace
       - id: check-yaml
+        # feature_repo/feature_store.yaml is a Feast template: ${VAR} placeholders
+        # are substituted at load time and are not valid YAML scalars to this hook.
+        exclude: ^feature_repo/feature_store\.yaml$
       - id: check-toml
       - id: check-added-large-files
+        # The archive is 83 MB and belongs to DVC. This hook is the backstop that
+        # keeps it — or a model artifact — out of a commit by accident.
         args: [--maxkb=512]
+
+  # Design 6.4 lists a secret scanner as a Lab 2 task. The .env holding the MinIO
+  # root credentials and the author salt is gitignored, but "it is gitignored" is a
+  # convention and this is a check.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks

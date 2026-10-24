@@ -1,0 +1,81 @@
+# Tier-0 rule baseline — design 5.3, "hand-written keyword lexicon, first match wins".
+#
+# This is the honest "do we need ML at all" check and the documented fallback if the
+# model service is down for a long outage. It is not a candidate for promotion: the
+# design predicts it loses ~30 macro-F1 points to the TF-IDF baseline, and 7.2
+# records whether that prediction held.
+#
+# Matching: the normalised headline + dek is scanned for each category's terms in the
+# order below; a term matches on a word boundary; the first category with a match
+# wins. No match -> the fallback category, which is the training set's majority class.
+version: 1
+fallback: _majority_class_
+
+categories:
+  SPORTS: [nfl, nba, mlb, nhl, super bowl, olympic, olympics, world cup, quarterback,
+           touchdown, playoff, playoffs, coach, athlete, soccer, basketball, baseball,
+           tennis, golf, boxing, ncaa, league]
+
+  CRIME & JUSTICE: [murder, murdered, homicide, shooting, shooter, arrested, arrest,
+                    police, indicted, convicted, sentenced, lawsuit, prosecutor, trial,
+                    guilty, stabbed, robbery, assault, kidnapped, manslaughter]
+
+  POLITICS: [trump, obama, biden, clinton, senate, senator, congress, congressman,
+             republican, republicans, democrat, democrats, gop, white house, campaign,
+             election, voters, impeachment, filibuster, governor, legislature, midterms]
+
+  WORLD NEWS: [syria, ukraine, russia, china, isis, refugees, united nations, nato,
+               brexit, israel, palestinian, afghanistan, iraq, iran, north korea,
+               venezuela, embassy, airstrike, ceasefire]
+
+  BUSINESS & MONEY: [stocks, stock market, nasdaq, dow jones, earnings, ipo, merger,
+                     bankruptcy, retirement, mortgage, credit card, investors, startup,
+                     ceo, wall street, layoffs, recession, inflation, taxes]
+
+  SCIENCE & TECH: [nasa, spacex, astronomers, scientists, researchers, telescope,
+                   iphone, android, google, facebook, apple, microsoft, algorithm,
+                   artificial intelligence, robot, app, cybersecurity, data breach]
+
+  ENVIRONMENT: [climate change, global warming, emissions, carbon, endangered,
+                wildlife, pollution, renewable, solar power, oil spill, deforestation,
+                recycling, epa, fossil fuel, drought, hurricane season]
+
+  HEALTH & WELLNESS: [cancer, diabetes, depression, anxiety, meditation, mindfulness,
+                      sleep, workout, exercise, yoga, nutrition, vaccine, doctors,
+                      mental health, therapy, diet, obesity, insomnia, stress]
+
+  FOOD & DRINK: [recipe, recipes, cocktail, wine, beer, whiskey, chef, restaurant,
+                 baking, bake, grill, pasta, pizza, cheese, coffee, dessert, brunch,
+                 dinner party, ingredients]
+
+  TRAVEL: [hotel, flight, flights, airline, airport, vacation, destination, cruise,
+           tourists, backpacking, road trip, passport, resort, itinerary, airbnb,
+           travellers, travelers]
+
+  STYLE & BEAUTY: [fashion, runway, red carpet, makeup, lipstick, skincare, hairstyle,
+                   manicure, wardrobe, outfit, designer, couture, nail, eyeliner,
+                   fragrance, street style]
+
+  HOME & LIVING: [home decor, interior design, kitchen renovation, diy, furniture,
+                  gardening, cleaning tips, declutter, backyard, apartment tour,
+                  bedroom, renovation, houseplant]
+
+  FAMILY & RELATIONSHIPS: [parenting, parents, toddler, toddlers, newborn, pregnancy,
+                           breastfeeding, divorce, wedding, weddings, bride, groom,
+                           marriage, in-laws, co-parenting, kids, motherhood, fatherhood]
+
+  ENTERTAINMENT: [movie, film, box office, trailer, netflix, hbo, celebrity, actress,
+                  actor, album, grammy, oscars, emmy, kardashian, singer, tv show,
+                  season finale, late night, snl, comedian]
+
+  ARTS & CULTURE: [museum, gallery, exhibition, painting, sculpture, poetry, novel,
+                   author interview, theater, theatre, broadway, ballet, opera,
+                   literature, artist]
+
+  EDUCATION: [students, teachers, school district, classroom, tuition, college,
+              university, campus, standardized test, curriculum, student loan,
+              kindergarten, graduation, charter school]
+
+  SOCIETY & IDENTITY: [lgbtq, lgbt, transgender, gay, lesbian, queer, racism, racial,
+                       immigrants, feminism, sexism, church, muslim, jewish, pastor,
+                       civil rights, discrimination, activists, equality]
